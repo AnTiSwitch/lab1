@@ -52,7 +52,6 @@ namespace NetSdrClientApp
             }
         }
 
-        // ВИПРАВЛЕНО: Перейменовано з 'Disconnect' на 'Disconect', щоб виправити помилку збірки
         public void Disconect()
         {
             _tcpClient.Disconnect();
@@ -103,7 +102,7 @@ namespace NetSdrClientApp
             await SendTcpRequest(msg);
         }
 
-        private void _udpClient_MessageReceived(object? sender, byte[] e)
+        private static void _udpClient_MessageReceived(object? sender, byte[] e)
         {
             TranslateMessage(e, out _, out _, out _, out byte[] body);
             var samples = GetSamples(16, body);
@@ -140,7 +139,7 @@ namespace NetSdrClientApp
                 var completedTask = await Task.WhenAny(responseTask, Task.Delay(-1, cts.Token));
                 if (completedTask == responseTask)
                 {
-                    cts.Cancel();
+                    await cts.CancelAsync();
                     return await responseTask;
                 }
                 else
@@ -167,3 +166,4 @@ namespace NetSdrClientApp
         }
     }
 }
+
