@@ -83,9 +83,10 @@ jobs:
         shell: pwsh
 
         - name: Tests with coverage (OpenCover)
-  run: |
-    dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj -c Release --no-build `
-      /p:CollectCoverage=true `
-      /p:CoverletOutput=TestResults/coverage.xml `
-      /p:CoverletOutputFormat=opencover
-  shell: pwsh
+            run: |
+        dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj -c Release --no-build `
+            /p:CollectCoverage=true `
+            /p:CoverletOutput=TestResults/coverage.xml `
+             /p:CoverletOutputFormat=opencover
+        shell: pwsh
+  
