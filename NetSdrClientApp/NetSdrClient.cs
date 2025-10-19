@@ -2,26 +2,27 @@
 using NetSdrClientApp.Networking;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using static NetSdrClientApp.Messages.NetSdrMessageHelper;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace NetSdrClientApp
 {
     public class NetSdrClient
     {
-        // ВИПРАВЛЕНО: 'readonly' тепер стоїть перед типом
         private readonly ITcpClient _tcpClient;
         private readonly IUdpClient _udpClient;
 
-        public bool IQStarted { get; private set; }
-
-        private TaskCompletionSource<byte[]>? _responseTaskSource;
+        public bool IQStarted { get; set; }
 
         public NetSdrClient(ITcpClient tcpClient, IUdpClient udpClient)
         {
-            _tcpClient = tcpClient ?? throw new ArgumentNullException(nameof(tcpClient));
-            _udpClient = udpClient ?? throw new ArgumentNullException(nameof(udpClient));
+            _tcpClient = tcpClient;
+            _udpClient = udpClient;
 
             _tcpClient.MessageReceived += _tcpClient_MessageReceived;
             _udpClient.MessageReceived += _udpClient_MessageReceived;
@@ -47,13 +48,12 @@ namespace NetSdrClientApp
 
                 foreach (var msg in msgs)
                 {
-                    await SendTcpRequestAsync(msg);
+                    await SendTcpRequest(msg);
                 }
             }
         }
 
-        // ВИПРАВЛЕНО: Опечатка в назві методу
-        public void Disconnect()
+        public void Disconect()
         {
             _tcpClient.Disconnect();
         }
@@ -74,8 +74,8 @@ namespace NetSdrClientApp
             var args = new[] { iqDataMode, start, fifo16bitCaptureMode, n };
 
             var msg = NetSdrMessageHelper.GetControlItemMessage(MsgTypes.SetControlItem, ControlItemCodes.ReceiverState, args);
-
-            await SendTcpRequestAsync(msg);
+            
+            await SendTcpRequest(msg);
 
             IQStarted = true;
 
@@ -91,11 +91,12 @@ namespace NetSdrClientApp
             }
 
             var stop = (byte)0x01;
+
             var args = new byte[] { 0, stop, 0, 0 };
 
             var msg = NetSdrMessageHelper.GetControlItemMessage(MsgTypes.SetControlItem, ControlItemCodes.ReceiverState, args);
 
-            await SendTcpRequestAsync(msg);
+            await SendTcpRequest(msg);
 
             IQStarted = false;
 
@@ -110,7 +111,7 @@ namespace NetSdrClientApp
 
             var msg = NetSdrMessageHelper.GetControlItemMessage(MsgTypes.SetControlItem, ControlItemCodes.ReceiverFrequency, args);
 
-            await SendTcpRequestAsync(msg);
+            await SendTcpRequest(msg);
         }
 
         private void _udpClient_MessageReceived(object? sender, byte[] e)
@@ -118,7 +119,7 @@ namespace NetSdrClientApp
             NetSdrMessageHelper.TranslateMessage(e, out MsgTypes type, out ControlItemCodes code, out ushort sequenceNum, out byte[] body);
             var samples = NetSdrMessageHelper.GetSamples(16, body);
 
-            Console.WriteLine($"Samples recieved: " + string.Join(" ", body.Select(b => b.ToString("X2"))));
+            Console.WriteLine($"Samples recieved: " + body.Select(b => Convert.ToString(b, toBase: 16)).Aggregate((l, r) => $"{l} {r}"));
 
             using (FileStream fs = new FileStream("samples.bin", FileMode.Append, FileAccess.Write, FileShare.Read))
             using (BinaryWriter sw = new BinaryWriter(fs))
@@ -130,39 +131,35 @@ namespace NetSdrClientApp
             }
         }
 
-        private async Task<byte[]?> SendTcpRequestAsync(byte[] msg)
+        private TaskCompletionSource<byte[]> responseTaskSource;
+
+        private async Task<byte[]> SendTcpRequest(byte[] msg)
         {
             if (!_tcpClient.Connected)
             {
                 Console.WriteLine("No active connection.");
-                // ВИПРАВЛЕНО: Повертаємо null, але асинхронно
                 return null;
             }
 
-            _responseTaskSource = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            responseTaskSource = new TaskCompletionSource<byte[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var responseTask = responseTaskSource.Task;
 
             await _tcpClient.SendMessageAsync(msg);
 
-            // Очікуємо на відповідь з таймаутом, щоб уникнути вічного очікування
-            var completedTask = await Task.WhenAny(_responseTaskSource.Task, Task.Delay(5000)); // 5 секунд таймаут
+            var resp = await responseTask;
 
-            if (completedTask == _responseTaskSource.Task)
-            {
-                return await _responseTaskSource.Task;
-            }
-            else
-            {
-                Console.WriteLine("Request timed out.");
-                _responseTaskSource.TrySetCanceled();
-                return null;
-            }
+            return resp;
         }
 
         private void _tcpClient_MessageReceived(object? sender, byte[] e)
         {
             //TODO: add Unsolicited messages handling here
-            _responseTaskSource?.TrySetResult(e);
-            Console.WriteLine("Response recieved: " + string.Join(" ", e.Select(b => b.ToString("X2"))));
+            if (responseTaskSource != null)
+            {
+                responseTaskSource.SetResult(e);
+                responseTaskSource = null;
+            }
+            Console.WriteLine("Response recieved: " + e.Select(b => Convert.ToString(b, toBase: 16)).Aggregate((l, r) => $"{l} {r}"));
         }
     }
 }
