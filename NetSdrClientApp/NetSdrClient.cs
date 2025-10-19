@@ -10,10 +10,12 @@ using System.Threading.Tasks;
 using static NetSdrClientApp.Messages.NetSdrMessageHelper;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
+
 namespace NetSdrClientApp
 {
     public class NetSdrClient
     {
+
         private readonly ITcpClient _tcpClient;
         private readonly IUdpClient _udpClient;
 
@@ -74,13 +76,14 @@ namespace NetSdrClientApp
             var args = new[] { iqDataMode, start, fifo16bitCaptureMode, n };
 
             var msg = NetSdrMessageHelper.GetControlItemMessage(MsgTypes.SetControlItem, ControlItemCodes.ReceiverState, args);
-            
+
             await SendTcpRequest(msg);
 
             IQStarted = true;
 
             _ = _udpClient.StartListeningAsync();
         }
+
 
         public async Task StopIQAsync()
         {
@@ -114,9 +117,10 @@ namespace NetSdrClientApp
             await SendTcpRequest(msg);
         }
 
+#pragma warning disable S2325 // Event handler cannot be static
         private void _udpClient_MessageReceived(object? sender, byte[] e)
         {
-            NetSdrMessageHelper.TranslateMessage(e, out MsgTypes type, out ControlItemCodes code, out ushort sequenceNum, out byte[] body);
+            NetSdrMessageHelper.TranslateMessage(e, out _, out _, out _, out byte[] body);
             var samples = NetSdrMessageHelper.GetSamples(16, body);
 
             Console.WriteLine($"Samples recieved: " + body.Select(b => Convert.ToString(b, toBase: 16)).Aggregate((l, r) => $"{l} {r}"));
@@ -130,10 +134,11 @@ namespace NetSdrClientApp
                 }
             }
         }
+#pragma warning restore S2325
 
-        private TaskCompletionSource<byte[]> responseTaskSource;
+        private TaskCompletionSource<byte[]>? responseTaskSource;
 
-        private async Task<byte[]> SendTcpRequest(byte[] msg)
+        private async Task<byte[]?> SendTcpRequest(byte[] msg)
         {
             if (!_tcpClient.Connected)
             {
@@ -153,7 +158,7 @@ namespace NetSdrClientApp
 
         private void _tcpClient_MessageReceived(object? sender, byte[] e)
         {
-            //TODO: add Unsolicited messages handling here
+
             if (responseTaskSource != null)
             {
                 responseTaskSource.SetResult(e);
