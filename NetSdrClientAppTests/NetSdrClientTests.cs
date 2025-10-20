@@ -215,5 +215,5 @@ public class NetSdrClientQualityTests
         });
     }
 
-    #endregion 
+    #endregion
 }
