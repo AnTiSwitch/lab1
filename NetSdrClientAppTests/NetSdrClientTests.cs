@@ -1,4 +1,7 @@
 ﻿using Moq;
+
+//  Commentary
+
 using NUnit.Framework;
 using NetSdrClientApp;
 using NetSdrClientApp.Networking;
