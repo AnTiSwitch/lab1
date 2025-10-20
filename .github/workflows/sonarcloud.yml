@@ -54,7 +54,7 @@ jobs:
 
       # 1) BEGIN: SonarScanner for .NET
       - name: SonarScanner Begin
-        shell: pwsh # <-- ПРАВИЛЬНЕ РОЗТАШУВАННЯ
+        shell: pwsh 
         run: |
           dotnet tool install --global dotnet-sonarscanner
           echo "$env:USERPROFILE\.dotnet\tools" >> $env:GITHUB_PATH
@@ -76,7 +76,7 @@ jobs:
         run: dotnet build NetSdrClient.sln -c Release --no-restore
 
       - name: Tests with coverage (OpenCover)
-        shell: pwsh # <-- ПРАВИЛЬЛЬНЕ РОЗТАШУВАННЯ
+        shell: pwsh 
         run: |
           dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj -c Release --no-build `
             /p:CollectCoverage=true `
@@ -85,5 +85,5 @@ jobs:
       
       # 3) END: SonarScanner
       - name: SonarScanner End
-        shell: pwsh # <-- ПРАВИЛЬНЕ РОЗТАШУВАННЯ
+        shell: pwsh
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
