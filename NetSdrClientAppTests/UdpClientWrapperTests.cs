@@ -1,12 +1,11 @@
 using System;
-using NUnit.Framework; // <-- Змінено з Xunit
-					   // (Можливо, знадобиться: using NetSdrClientApp.Networking;)
+using NUnit.Framework; 
 
 namespace NetSdrClientAppTests
 {
 	public class UdpClientWrapperTests
 	{
-		[Test] // <-- Змінено з [Fact]
+		[Test] 
 		public void Exit_WhenNotStarted_DoesNotThrowException()
 		{
 			// Arrange
