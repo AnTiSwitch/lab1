@@ -1,13 +1,13 @@
 using System;
 using System.Threading.Tasks;
 using NetSdrClientApp.Networking;
-using NUnit.Framework; // <-- «м≥нено з Xunit
+using NUnit.Framework; 
 
 namespace NetSdrClientAppTests
 {
     public class TcpClientWrapperTests
     {
-        [Test] // <-- «м≥нено з [Fact]
+        [Test] 
         public void SendMessageAsync_Bytes_WhenNotConnected_ThrowsInvalidOperationException()
         {
             // Arrange
@@ -20,7 +20,7 @@ namespace NetSdrClientAppTests
                 await tcpClient.SendMessageAsync(testData));
         }
 
-        [Test] // <-- «м≥нено з [Fact]
+        [Test] 
         public void SendMessageAsync_String_WhenNotConnected_ThrowsInvalidOperationException()
         {
             // Arrange
