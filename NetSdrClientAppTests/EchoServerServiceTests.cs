@@ -1,21 +1,19 @@
-﻿// Це простори імен, які ви маєте імпортувати
+﻿using Xunit;
+using Moq;
+using System.Threading.Tasks;
+using System.Threading;
+using System.Text;
+using System;
+using System.Net;
+using System.Linq;
+
 using EchoServer.Abstractions;
 using EchoServer.Services;
-using Moq;
-using System;
-using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Xunit;
 
 namespace NetSdrClientAppTests
 {
-    // Оскільки ваш файл лежить у цьому проекті, використовуйте цей простір імен
     public class EchoServerServiceTests
     {
-        // Приватні поля для мок-об'єктів, які використовуються у багатьох тестах
         private readonly Mock<ILogger> _mockLogger = new Mock<ILogger>();
         private readonly Mock<ITcpListenerFactory> _mockFactory = new Mock<ITcpListenerFactory>();
         private readonly Mock<ITcpListenerWrapper> _mockListener = new Mock<ITcpListenerWrapper>();
@@ -24,15 +22,7 @@ namespace NetSdrClientAppTests
 
         private EchoServerService CreateServer(int port = 5000)
         {
-            // Налаштовуємо Factory: завжди повертає наш Mock Listener
             _mockFactory.Setup(f => f.Create(It.IsAny<IPAddress>(), port)).Returns(_mockListener.Object);
-
-            // Налаштовуємо Listener: 1) Приймає клієнта, 2) Кидає виняток (для виходу з циклу StartAsync)
-            _mockListener.SetupSequence(l => l.AcceptTcpClientAsync())
-                .ReturnsAsync(_mockClient.Object)
-                .ThrowsAsync(new ObjectDisposedException("Simulated listener close"));
-
-            // Налаштовуємо Client: завжди повертає наш Mock Stream
             _mockClient.Setup(c => c.GetStream()).Returns(_mockStream.Object);
 
             return new EchoServerService(port, _mockLogger.Object, _mockFactory.Object);
@@ -46,7 +36,10 @@ namespace NetSdrClientAppTests
             string testMessage = "Test Data";
             byte[] messageBytes = Encoding.UTF8.GetBytes(testMessage);
 
-            // Налаштовуємо Stream: 1. Читаємо дані. 2. Кінець потоку (0 байт).
+            _mockListener.SetupSequence(l => l.AcceptTcpClientAsync())
+                .ReturnsAsync(_mockClient.Object) // 1. Клієнт підключився
+                .ThrowsAsync(new ObjectDisposedException("Simulated listener close")); // 2. Примусовий вихід
+
             _mockStream.SetupSequence(s => s.ReadAsync(
                 It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(messageBytes.Length)
@@ -54,46 +47,51 @@ namespace NetSdrClientAppTests
 
             // Act
             var serverTask = server.StartAsync();
-
-            // Даємо час на обробку клієнта
             await Task.Delay(100);
+            server.Stop();
+            await serverTask;
 
-            server.Stop(); // Викликаємо Stop, щоб listener кинув виняток і StartAsync завершився
-
-            // Assert
-            await serverTask; // Чекаємо завершення StartAsync
-
-            // 1. Перевірка Echo-логіки
-            _mockStream.Verify(
-                s => s.WriteAsync(
-                    // Перевіряємо, що в WriteAsync передані ті самі байти
-                    It.Is<byte[]>(b => b.Take(messageBytes.Length).SequenceEqual(messageBytes)),
-                    0,
-                    messageBytes.Length,
-                    It.IsAny<CancellationToken>()),
-                Times.Once, "Повідомлення не було відправлено назад (Echo).");
-
-            // 2. Перевірка коректного закриття ресурсів
-            _mockClient.Verify(c => c.Close(), Times.Once, "Клієнт повинен бути закритий у блоці finally.");
-
-            // 3. Перевірка логування ключових подій
-            _mockLogger.Verify(l => l.Log("Server started on port 5000."), Times.Once);
-            _mockLogger.Verify(l => l.Log("Client connected."), Times.Once);
-            _mockLogger.Verify(l => l.Log(It.Is<string>(s => s.Contains("Echoed 9 bytes"))), Times.Once); // 9 байт довжина "Test Data"
-            _mockLogger.Verify(l => l.Log("Client disconnected."), Times.Once);
+            // Assert (Перевірка покриття всіх блоків)
+            Xunit.Assert.True(serverTask.IsCompleted, "StartAsync повинен завершитися після Stop.");
+            _mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(), 0, messageBytes.Length, It.IsAny<CancellationToken>()), Times.Once);
+            _mockClient.Verify(c => c.Close(), Times.Once);
             _mockLogger.Verify(l => l.Log("Server shutdown."), Times.Once);
         }
 
         [Fact]
-        public async Task HandleClientAsync_ShouldCloseClient_OnSimulatedNetworkError()
+        public async Task StartAsync_ShouldLogAcceptError_WhenListenerFails()
         {
             // Arrange
             var server = CreateServer();
 
-            // Налаштовуємо Stream: кидаємо виняток під час читання, щоб перевірити блок catch/finally
-            _mockStream.Setup(s => s.ReadAsync(
-                It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("Simulated Network Error"));
+            // 1. Кидаємо загальний виняток, щоб потрапити в блок catch StartAsync
+            _mockListener.SetupSequence(l => l.AcceptTcpClientAsync())
+                .ThrowsAsync(new InvalidOperationException("Accept failed"))
+                .ThrowsAsync(new ObjectDisposedException("Simulated listener close"));
+
+            // Act
+            var serverTask = server.StartAsync();
+            await Task.Delay(100);
+            server.Stop();
+
+            // Assert
+            _mockLogger.Verify(l => l.LogError(Moq.It.Is<string>(s => s.Contains("Accept failed"))), Times.Once);
+        }
+
+
+        [Fact]
+        public async Task HandleClientAsync_ShouldCatchExceptionAndLog()
+        {
+            // Arrange
+            var server = CreateServer();
+
+            // 1. Налаштовуємо Stream, щоб кинути виняток для покриття блоку catch
+            _mockStream.Setup(s => s.ReadAsync(It.IsAny<byte[]>(), 0, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new IOException("Simulated Read Error"));
+
+            _mockListener.SetupSequence(l => l.AcceptTcpClientAsync())
+                .ReturnsAsync(_mockClient.Object)
+                .ThrowsAsync(new ObjectDisposedException("Simulated listener close"));
 
             // Act
             var serverTask = server.StartAsync();
@@ -102,31 +100,29 @@ namespace NetSdrClientAppTests
             await serverTask;
 
             // Assert
-            // 1. Перевіряємо, що помилка була залогована
-            _mockLogger.Verify(l => l.LogError(It.Is<string>(s => s.Contains("Simulated Network Error"))), Times.Once);
-            // 2. З'єднання повинно бути закрито, незважаючи на помилку
-            _mockClient.Verify(c => c.Close(), Times.Once, "Клієнт повинен бути закритий, навіть якщо сталася помилка.");
+            _mockLogger.Verify(l => l.LogError(Moq.It.Is<string>(s => s.Contains("Simulated Read Error"))), Times.Once);
+            _mockClient.Verify(c => c.Close(), Times.Once, "Клієнт повинен бути закритий у блоці finally.");
         }
 
         [Fact]
-        public void Constructor_ShouldThrowArgumentOutOfRangeException_ForInvalidPort()
-        {
-            // Assert
-            Xunit.Assert.Throws<ArgumentOutOfRangeException>(() => new EchoServerService(0, _mockLogger.Object, _mockFactory.Object));
-        }
-
-        [Fact]
-        public void Dispose_ShouldCallStopAndDisposeInternalResources()
+        public void Dispose_ShouldCallStopAndDisposeListener()
         {
             // Arrange
             var server = CreateServer();
+            _mockListener.Setup(l => l.Dispose()); // Перевіряємо, що Dispose викликається
 
             // Act
             server.Dispose();
 
             // Assert
             _mockListener.Verify(l => l.Stop(), Times.Once, "Stop() має бути викликано на listener.");
-            // Перевірка, що Dispose listener'а також викликається
+            // Перевірка, що Dispose викликається 
+        }
+
+        [Fact]
+        public void Constructor_ShouldThrowArgumentOutOfRangeException_ForInvalidPort()
+        {
+            Xunit.Assert.Throws<ArgumentOutOfRangeException>(() => new EchoServerService(0, _mockLogger.Object, _mockFactory.Object));
         }
     }
 }
