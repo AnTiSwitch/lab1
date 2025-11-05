@@ -10,6 +10,7 @@ namespace EchoServer.Implementations
             Console.WriteLine(message);
         }
 
+
         public void LogError(string message)
         {
             // Можна додати колір, як описано в аналізі
