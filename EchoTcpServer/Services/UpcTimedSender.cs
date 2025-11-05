@@ -41,7 +41,7 @@ namespace EchoServer.Services
             _logger.Log($"UDP Sender started, sending every {intervalMilliseconds}ms.");
         }
 
-        private void SendMessageCallback(object state)
+        private void SendMessageCallback(object? state)
         {
             try
             {
