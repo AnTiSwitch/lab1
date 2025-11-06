@@ -73,5 +73,27 @@ namespace NetSdrClientAppTests
             mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.Pass("Handler exited correctly when ReadAsync returned 0.");
         }
+
+        [Test]
+        public void HandleClientStreamAsync_WhenExceptionOccurs_ShouldCatchAndExitGracefully()
+        {
+            // Arrange
+            var mockStream = new Mock<INetworkStream>();
+            var handler = new ClientEchoHandler();
+
+            // Налаштовуємо ReadAsync на кидання помилки
+            mockStream.Setup(s => s.ReadAsync(It.IsAny<byte[]>(), 0, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                      .ThrowsAsync(new IOException("Simulated network failure")); // Кидаємо виняток
+
+            // Act & Assert
+            // Ми очікуємо, що метод не кине виняток, а коректно його обробить
+            Assert.DoesNotThrowAsync(async () =>
+            {
+                await handler.HandleClientStreamAsync(mockStream.Object, CancellationToken.None);
+            });
+
+            // Перевіряємо, що WriteAsync НЕ був викликаний
+            mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
     }
 }
