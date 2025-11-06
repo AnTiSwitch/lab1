@@ -5,6 +5,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using System.Linq;
+using System.IO;
+
 namespace EchoServer
 {
     public class EchoServer
@@ -47,19 +50,15 @@ namespace EchoServer
 
         private async Task HandleClientAsync(TcpClient client, CancellationToken token)
         {
-            using (NetworkStream stream = client.GetStream())
+            var handler = new ClientEchoHandler();
+
+            // Тепер ми використовуємо нашу обгортку:
+            using (var streamWrapper = new NetworkStreamWrapper(client.GetStream()))
             {
                 try
                 {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
-
-                    while (!token.IsCancellationRequested && (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
-                    {
-                        // Echo back the received message
-                        await stream.WriteAsync(buffer, 0, bytesRead, token);
-                        Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
-                    }
+                    // Виклик виділеної, тестованої логіки
+                    await handler.HandleClientStreamAsync(streamWrapper, token);
                 }
                 catch (Exception ex) when (!(ex is OperationCanceledException))
                 {
