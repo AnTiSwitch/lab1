@@ -8,7 +8,7 @@ using System;
 using System.Net;
 using System.Reflection;
 using System.Text;
-using System.Linq; // Для використання Linq в тестах
+using System.Linq;
 
 namespace NetSdrClientAppTests
 {
@@ -59,15 +59,11 @@ namespace NetSdrClientAppTests
         public async Task Stop_ShouldCallListenerStopAndLogShutdown()
         {
             // Викликаємо StartAsync, щоб ініціалізувати _listener
-            // У реальному тесті ми не чекаємо його завершення
             _ = _server.StartAsync();
 
             _server.Stop();
 
-            // Перевіряємо, що викликано Stop на Listener
             _mockListener.Verify(l => l.Stop(), Times.Once);
-
-            // Перевіряємо, що викликано логування "Server stopped."
             _mockLogger.Verify(l => l.Log("Server stopped."), Times.Once);
         }
 
@@ -76,6 +72,10 @@ namespace NetSdrClientAppTests
         [Test]
         public async Task HandleClientAsync_ShouldEchoReceivedDataAndLog()
         {
+            // Створення токену для запобігання зависанню тесту
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            CancellationToken token = cts.Token;
+
             // 1. Імітуємо з'єднання та потік даних
             var mockClient = new Mock<ITcpClientWrapper>();
             var mockStream = new Mock<INetworkStreamWrapper>();
@@ -114,8 +114,8 @@ namespace NetSdrClientAppTests
             // 2. Викликаємо HandleClientAsync через РЕФЛЕКСІЮ 
             var handleMethod = typeof(EchoServerService).GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance);
 
-            // Запускаємо і очікуємо завершення
-            var handlerTask = (Task)handleMethod.Invoke(_server, new object[] { mockClient.Object, CancellationToken.None });
+            // Запускаємо і очікуємо завершення. Передаємо CancellationToken.
+            var handlerTask = (Task)handleMethod.Invoke(_server, new object[] { mockClient.Object, token });
             await handlerTask.ConfigureAwait(false);
 
 
@@ -132,7 +132,7 @@ namespace NetSdrClientAppTests
             _mockLogger.Verify(l => l.Log($"Echoed {bytesToReturn} bytes to the client."), Times.Once);
             _mockLogger.Verify(l => l.Log("Client disconnected."), Times.Once);
             mockClient.Verify(c => c.Close(), Times.Once);
-            mockStream.Verify(s => s.Dispose(), Times.Once); // Перевіряємо, що using спрацював
+            mockStream.Verify(s => s.Dispose(), Times.Once);
         }
     }
 }
