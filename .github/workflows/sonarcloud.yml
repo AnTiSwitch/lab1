@@ -67,6 +67,7 @@ jobs:
             /d:sonar.cpd.cs.minimumLines=5 `
             /d:sonar.exclusions="**/bin/**,**/obj/**,**/sonarcloud.yml" `
             /d:sonar.qualitygate.wait=true
+            /d:sonar.cs.opencover.reportsPaths="NetSdrClientAppTests/TestResults/coverage.xml"
       
       # 2) BUILD & TEST
       - name: Restore dependencies
@@ -80,7 +81,7 @@ jobs:
         run: |
           dotnet test NetSdrClientAppTests/NetSdrClientAppTests.csproj -c Release --no-build `
             /p:CollectCoverage=true `
-            /p:CoverletOutput=TestResults/coverage.xml `
+            /p:CoverletOutput=NetSdrClientAppTests/TestResults/coverage.xml `
             /p:CoverletOutputFormat=opencover
       
       # 3) END: SonarScanner
