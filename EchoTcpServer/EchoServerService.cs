@@ -13,14 +13,14 @@ namespace EchoTcpServer
         private readonly int _port;
         private readonly ILogger _logger;
         private readonly ITcpListenerFactory _listenerFactory;
-        private ITcpListenerWrapper _listener; // Використовуємо інтерфейс
-        private CancellationTokenSource _cancellationTokenSource;
+        private readonly CancellationTokenSource _cancellationTokenSource;
+        private ITcpListenerWrapper? _listener;
 
         // Конструктор з Dependency Injection
         public EchoServerService(int port, ILogger logger, ITcpListenerFactory listenerFactory)
         {
             // Валідація параметрів
-            if (port <= 0 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
+            if(port <= 0 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
 
             _port = port;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

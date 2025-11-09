@@ -25,17 +25,14 @@ namespace NetSdrClientAppTests
         [SetUp]
         public void SetUp()
         {
-            // Ініціалізація мок-об'єктів перед кожним тестом
             _mockLogger = new Mock<ILogger>();
             _mockListenerFactory = new Mock<ITcpListenerFactory>();
             _mockListener = new Mock<ITcpListenerWrapper>();
 
-            // Налаштування фабрики: повертає наш мок-Listener
             _mockListenerFactory
                 .Setup(f => f.Create(IPAddress.Any, TestPort))
                 .Returns(_mockListener.Object);
 
-            // Створення тестованого об'єкта (SUT) з моками через DI
             _server = new EchoServerService(TestPort, _mockLogger.Object, _mockListenerFactory.Object);
         }
 
@@ -50,7 +47,8 @@ namespace NetSdrClientAppTests
         [Test]
         public void Constructor_ShouldThrowArgumentNullException_WhenLoggerIsNull()
         {
-            Assert.Throws<ArgumentNullException>(() => new EchoServerService(TestPort, null, _mockListenerFactory.Object));
+            // Викликаємо конструктор з null, щоб перевірити валідацію
+            Assert.Throws<ArgumentNullException>(() => new EchoServerService(TestPort, null!, _mockListenerFactory.Object));
         }
 
         // --- Тести методу Stop() ---
@@ -58,7 +56,7 @@ namespace NetSdrClientAppTests
         [Test]
         public async Task Stop_ShouldCallListenerStopAndLogShutdown()
         {
-            // Викликаємо StartAsync, щоб ініціалізувати _listener
+            // Викликаємо StartAsync, щоб _listener був ініціалізований
             _ = _server.StartAsync();
 
             _server.Stop();
@@ -72,31 +70,28 @@ namespace NetSdrClientAppTests
         [Test]
         public async Task HandleClientAsync_ShouldEchoReceivedDataAndLog()
         {
-            // Створення токену для запобігання зависанню тесту
+            // 1. Налаштування (токен з таймаутом для запобігання зависанню)
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             CancellationToken token = cts.Token;
 
-            // 1. Імітуємо з'єднання та потік даних
             var mockClient = new Mock<ITcpClientWrapper>();
             var mockStream = new Mock<INetworkStreamWrapper>();
 
             mockClient.Setup(c => c.GetStream()).Returns(mockStream.Object);
 
-            // Дані, які "прочитає" потік: "HELLO" (5 байт)
+            // Дані: "HELLO" (5 байт)
             byte[] inputData = Encoding.ASCII.GetBytes("HELLO");
-            int bytesToReturn = inputData.Length; // 5 байт
+            int bytesToReturn = inputData.Length;
 
-            // Налаштовуємо послідовність викликів
             var sequence = new MockSequence();
 
-            // 1й виклик ReadAsync: повертає 5 байт і КОПІЮЄ їх у буфер сервера
+            // 1й виклик ReadAsync: повертає 5 байт і КОПІЮЄ їх у буфер
             mockStream.InSequence(sequence)
                       .Setup(s => s.ReadAsync(
                           It.IsAny<byte[]>(),
                           It.IsAny<int>(),
                           It.IsAny<int>(),
                           It.IsAny<CancellationToken>()))
-                      // !!! Callback, який копіює дані в буфер сервера !!!
                       .Callback((byte[] buffer, int offset, int count, CancellationToken t) => {
                           Array.Copy(inputData, 0, buffer, offset, bytesToReturn);
                       })
@@ -112,10 +107,10 @@ namespace NetSdrClientAppTests
                       .ReturnsAsync(0);
 
             // 2. Викликаємо HandleClientAsync через РЕФЛЕКСІЮ 
-            var handleMethod = typeof(EchoServerService).GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+            var handleMethod = typeof(EchoServerService).GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-            // Запускаємо і очікуємо завершення. Передаємо CancellationToken.
-            var handlerTask = (Task)handleMethod.Invoke(_server, new object[] { mockClient.Object, token });
+            // Викликаємо, придушуючи попередження/винятки
+            var handlerTask = (Task)handleMethod.Invoke(_server, new object[] { mockClient.Object, token })!;
             await handlerTask.ConfigureAwait(false);
 
 
@@ -125,7 +120,7 @@ namespace NetSdrClientAppTests
             mockStream.Verify(s => s.WriteAsync(
                                    It.IsAny<byte[]>(),
                                    It.IsAny<int>(),
-                                   bytesToReturn, // 5 байт
+                                   bytesToReturn,
                                    It.IsAny<CancellationToken>()), Times.Once);
 
             // Перевіряємо, що логування було викликане

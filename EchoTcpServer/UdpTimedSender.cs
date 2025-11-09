@@ -1,3 +1,5 @@
+// Файл: EchoTcpServer/UdpTimedSender.cs
+
 using EchoTcpServer.Abstractions;
 using System;
 using System.Linq;
@@ -12,8 +14,10 @@ namespace EchoTcpServer
         private readonly string _host;
         private readonly int _port;
         private readonly UdpClient _udpClient;
-        private readonly ILogger _logger; // Доданий ILogger
-        private Timer _timer;
+        private readonly ILogger _logger;
+
+        // ВИПРАВЛЕНО: Додано '?' (nullable)
+        private Timer? _timer;
         private ushort i = 0;
         private readonly Random _random = new Random();
 
@@ -23,20 +27,21 @@ namespace EchoTcpServer
             _port = port;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _udpClient = new UdpClient();
+            // _timer залишається null до StartSending()
         }
 
-        // 1. МЕТОД, ЯКИЙ ЗАПУСКАЄ ВІДПРАВКУ (Відсутній у вашому фрагменті)
         public void StartSending(int intervalMilliseconds)
         {
             if (_timer != null)
                 throw new InvalidOperationException("Sender is already running.");
 
-            _timer = new Timer(SendMessageCallback, null, 0, intervalMilliseconds);
+            // ВИПРАВЛЕНО: Використовуємо лямбда-функцію для безпечної передачі стану
+            _timer = new Timer(state => SendMessageCallback(state), null, 0, intervalMilliseconds);
             _logger.Log($"UDP Sender started, sending every {intervalMilliseconds}ms to {_host}:{_port}.");
         }
 
-        // 2. МЕТОД-КОЛБЕК, ЯКИЙ ВІДПРАВЛЯЄ ПОВІДОМЛЕННЯ (Відсутній у вашому фрагменті)
-        private void SendMessageCallback(object state)
+        // ВИПРАВЛЕНО: Додано '?' до 'object' для відповідності TimerCallback
+        private void SendMessageCallback(object? state)
         {
             try
             {
@@ -48,28 +53,26 @@ namespace EchoTcpServer
                 var endpoint = new IPEndPoint(IPAddress.Parse(_host), _port);
 
                 _udpClient.Send(msg, msg.Length, endpoint);
-                _logger.Log($"Message sent (ID: {i}) to {_host}:{_port} "); // Використовуємо ILogger
+                _logger.Log($"Message sent (ID: {i}) to {_host}:{_port} ");
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Error sending message: {ex.Message}"); // Використовуємо ILogger
+                _logger.LogError($"Error sending message: {ex.Message}");
             }
         }
 
-        // 3. МЕТОД, ЯКИЙ ЗУПИНЯЄ ВІДПРАВКУ (Відсутній у вашому фрагменті)
         public void StopSending()
         {
+            // Використовуємо безпечну навігацію
             _timer?.Dispose();
             _timer = null;
             _logger.Log("UDP Sender stopped.");
         }
 
-        // 4. МЕТОД ДЛЯ ОЧИЩЕННЯ РЕСУРСІВ (Він був у вашому фрагменті, але ми його фіналізуємо)
         public void Dispose()
         {
             StopSending();
             _udpClient.Dispose();
-            // Запобігаємо фіналізації
             GC.SuppressFinalize(this);
         }
     }
