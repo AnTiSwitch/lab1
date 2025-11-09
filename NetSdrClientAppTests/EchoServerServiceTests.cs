@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System;
 using System.Net;
+using EchoTcpServer.Wrappers;
 
 namespace NetSdrClientAppTests
 {
