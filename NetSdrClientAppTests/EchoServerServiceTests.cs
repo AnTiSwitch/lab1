@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System;
 using System.Net;
-using EchoTcpServer.Wrappers;
+using System.Reflection; // <--- ДОДАНО: Для виклику приватного методу
 
 namespace NetSdrClientAppTests
 {
@@ -23,17 +23,14 @@ namespace NetSdrClientAppTests
         [SetUp]
         public void SetUp()
         {
-            // Ініціалізація мок-об'єктів перед кожним тестом
             _mockLogger = new Mock<ILogger>();
             _mockListenerFactory = new Mock<ITcpListenerFactory>();
             _mockListener = new Mock<ITcpListenerWrapper>();
 
-            // Налаштування фабрики, щоб вона завжди повертала наш мок-Listener
             _mockListenerFactory
                 .Setup(f => f.Create(IPAddress.Any, TestPort))
                 .Returns(_mockListener.Object);
 
-            // Створення тестованого об'єкта (SUT) з моками через DI
             _server = new EchoServerService(TestPort, _mockLogger.Object, _mockListenerFactory.Object);
         }
 
@@ -42,7 +39,6 @@ namespace NetSdrClientAppTests
         [Test]
         public void Constructor_ShouldThrowArgumentOutOfRangeException_WhenPortIsInvalid()
         {
-            // Перевіряємо, чи спрацьовує валідація, яку ми додали під час рефакторингу
             Assert.Throws<ArgumentOutOfRangeException>(() => new EchoServerService(0, _mockLogger.Object, _mockListenerFactory.Object));
         }
 
@@ -55,21 +51,15 @@ namespace NetSdrClientAppTests
         // --- Тести методу Stop() ---
 
         [Test]
-        public void Stop_ShouldCallListenerStopAndLogShutdown()
+        public async Task Stop_ShouldCallListenerStopAndLogShutdown()
         {
-            // 1. Спочатку запускаємо StartAsync, щоб _listener ініціалізувався
-            // (Виклик StartAsync для ініціалізації)
+            // Викликаємо StartAsync, щоб ініціалізувати _listener
+            // (Виклик має бути awaitable, але ми можемо ігнорувати Task, якщо він не блокує)
             _server.StartAsync();
 
-            // 2. Викликаємо Stop()
             _server.Stop();
 
-            // 3. Перевіряємо, що методи мок-об'єктів були викликані
-
-            // Перевіряємо, що викликано Stop на Listener
             _mockListener.Verify(l => l.Stop(), Times.Once);
-
-            // Перевіряємо, що було викликано логування "Server stopped."
             _mockLogger.Verify(l => l.Log("Server stopped."), Times.Once);
         }
 
@@ -86,39 +76,51 @@ namespace NetSdrClientAppTests
 
             // Дані, які "прочитає" потік: "HELLO" (5 байт)
             byte[] inputData = System.Text.Encoding.ASCII.GetBytes("HELLO");
-            byte[] buffer = new byte[8192];
+            int bytesToReturn = inputData.Length; // 5 байт
 
-            // Налаштовуємо потік для імітації читання:
-            // 1й виклик: читає 5 байт (HELLO)
-            // 2й виклик: читає 0 байт (кінець потоку)
+            // Налаштовуємо послідовність викликів
             var sequence = new MockSequence();
+
+            // 1й виклик ReadAsync: повертає 5 байт і КОПІЮЄ їх у буфер сервера (ЧОМУ ПОМИЛКА БУЛА)
             mockStream.InSequence(sequence)
-                      .Setup(s => s.ReadAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                      .ReturnsAsync((byte[] b, int offset, int count, CancellationToken t) => {
-                          Array.Copy(inputData, 0, b, offset, inputData.Length);
-                          return inputData.Length;
-                      });
+                      .Setup(s => s.ReadAsync(
+                          It.IsAny<byte[]>(),
+                          It.IsAny<int>(),
+                          It.IsAny<int>(),
+                          It.IsAny<CancellationToken>()))
+                      // !!! КРИТИЧНО: Callback, який копіює дані в буфер !!!
+                      .Callback((byte[] buffer, int offset, int count, CancellationToken t) => {
+                          Array.Copy(inputData, 0, buffer, offset, bytesToReturn);
+                      })
+                      .ReturnsAsync(bytesToReturn); // Повертаємо 5 прочитаних байт
+
+            // 2й виклик ReadAsync: повертає 0 (кінець потоку)
             mockStream.InSequence(sequence)
-                      .Setup(s => s.ReadAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                      .Setup(s => s.ReadAsync(
+                          It.IsAny<byte[]>(),
+                          It.IsAny<int>(),
+                          It.IsAny<int>(),
+                          It.IsAny<CancellationToken>()))
                       .ReturnsAsync(0);
 
-            // 2. Викликаємо HandleClientAsync (потрібна рефлексія або виклик через приватний метод)
-            // Оскільки HandleClientAsync є private, його потрібно викликати за допомогою рефлексії або зробити public для тестування (якщо дозволено).
-            // Припустимо, що ми зробили його protected/internal для тестування:
+            // 2. Викликаємо HandleClientAsync через РЕФЛЕКСІЮ (оскільки він приватний)
+            // Це стандартний хак для тестування private методів, якщо немає можливості змінити його на internal.
+            var handleMethod = typeof(EchoServerService).GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance);
 
-            // Тут потрібно викликати HandleClientAsync(mockClient.Object, CancellationToken.None);
-            // ... [Виклик методу] ...
+            await (Task)handleMethod.Invoke(_server, new object[] { mockClient.Object, CancellationToken.None });
+
 
             // 3. Перевірка
 
             // Перевіряємо, що було викликано запис 5 байт (ЕХО)
-            mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(),
-                                               It.IsAny<int>(),
-                                               inputData.Length, // перевіряємо, що відправлено 5 байт
-                                               It.IsAny<CancellationToken>()), Times.Once);
+            mockStream.Verify(s => s.WriteAsync(
+                                   It.IsAny<byte[]>(),
+                                   It.IsAny<int>(),
+                                   bytesToReturn, // перевіряємо, що відправлено 5 байт
+                                   It.IsAny<CancellationToken>()), Times.Once);
 
             // Перевіряємо, що логування було викликане
-            _mockLogger.Verify(l => l.Log($"Echoed 5 bytes to the client."), Times.Once);
+            _mockLogger.Verify(l => l.Log($"Echoed {bytesToReturn} bytes to the client."), Times.Once);
             _mockLogger.Verify(l => l.Log("Client disconnected."), Times.Once);
             mockClient.Verify(c => c.Close(), Times.Once);
         }
