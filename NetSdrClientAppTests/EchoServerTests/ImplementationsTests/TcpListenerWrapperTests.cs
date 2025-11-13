@@ -4,8 +4,13 @@ using System.Net;
 using EchoServer.Abstractions;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using NUnit.Framework.Constraints;
 using static NUnit.Framework.Assert;
+using NUnit.Framework.Constraints;
+
+// Додаємо статичний імпорт для Is, Throws
+using static NUnit.Framework.Is;
+using static NUnit.Framework.Throws;
+
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
@@ -18,6 +23,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
             var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
+            // ВИПРАВЛЕНО: Використовуємо Assert.That(value, Is.Not.Null)
             Assert.That(listenerField.GetValue(wrapper), Is.Not.Null);
             wrapper.Dispose();
         }
@@ -29,6 +35,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Start();
             wrapper.Dispose();
 
+            // ВИПРАВЛЕНО CS0119: Використовуємо Throws.Nothing усередині Assert.That
             Assert.That(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
@@ -51,8 +58,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
             ITcpClientWrapper result = await acceptTask;
 
-            IsNotNull(result);
-            IsInstanceOf<TcpClientWrapper>(result);
+            // ВИПРАВЛЕНО CS0103: Використовуємо Assert.That(value, Is.Not.Null)
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.InstanceOf<TcpClientWrapper>());
 
             wrapper.Dispose();
             result.Dispose();
