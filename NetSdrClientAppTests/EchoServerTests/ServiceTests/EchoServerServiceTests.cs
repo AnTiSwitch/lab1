@@ -5,11 +5,10 @@ using EchoServer.Abstractions;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using NUnit.Framework.Constraints;
 using System.Text;
-using System.Net.Sockets;
 using System.Reflection;
 using static NUnit.Framework.Assert;
+using static NUnit.Framework.Is;
 
 namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
 {
@@ -45,9 +44,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
 
             await server.StartAsync();
 
-            _mockFactory.Verify(f => f.Create(It.IsAny<System.Net.IPAddress>(), 5000), Times.Once, "Фабрика Listener не була використана.");
-            _mockListener.Verify(l => l.Start(), Times.Once, "Метод Start() на Listener не був викликаний.");
-            _mockLogger.Verify(l => l.Log(It.Is<string>(s => s.Contains("Server started on port 5000"))), Times.Once, "Запуск сервера не був залогований.");
+            Assert.That(_mockFactory.Verify(f => f.Create(Is.Any<System.Net.IPAddress>(), 5000), Times.Once, ""), Is.True);
+            Assert.That(_mockListener.Verify(l => l.Start(), Times.Once, ""), Is.True);
+            _mockLogger.Verify(l => l.Log(Is.StringContaining("Server started on port 5000")), Times.Once, "Запуск сервера не був залогований.");
         }
 
         [Test]
@@ -74,13 +73,24 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
         {
             const string testMessage = "TEST_ECHO_DATA";
             var inputBytes = Encoding.UTF8.GetBytes(testMessage);
+            const int bytesLength = 14;
 
             var mockStream = new Mock<INetworkStreamWrapper>();
             var mockClient = new Mock<ITcpClientWrapper>();
 
-            mockStream.SetupSequence(s => s.ReadAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(inputBytes.Length)
-                .ReturnsAsync(0);
+            // ВИПРАВЛЕННЯ: Використовуємо Callback для копіювання даних у буфер сервісу
+            mockStream.SetupSequence(s => s.ReadAsync(
+                It.IsAny<byte[]>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+                .Returns(new Func<byte[], int, int, CancellationToken, Task<int>>((buffer, offset, count, token) =>
+                {
+                    // Копіюємо дані у буфер, який передав сервіс
+                    Array.Copy(inputBytes, 0, buffer, offset, bytesLength);
+                    return Task.FromResult(bytesLength);
+                }))
+                .ReturnsAsync(0); // Кінець потоку
 
             mockClient.Setup(c => c.GetStream()).Returns(mockStream.Object);
             var server = new EchoServerService(5000, _mockLogger.Object, _mockFactory.Object);
@@ -89,14 +99,15 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
 
             await (Task)handleClientMethod.Invoke(server, new object[] { mockClient.Object, CancellationToken.None })!;
 
+            // Перевіряємо, що WriteAsync викликано з коректними даними
             mockStream.Verify(
                 s => s.WriteAsync(
-                    It.Is<byte[]>(b => Encoding.UTF8.GetString(b, 0, inputBytes.Length) == testMessage),
+                    It.Is<byte[]>(b => Encoding.UTF8.GetString(b, 0, bytesLength) == testMessage),
                     It.IsAny<int>(),
-                    It.Is<int>(c => c == inputBytes.Length),
+                    It.Is<int>(c => c == bytesLength),
                     It.IsAny<CancellationToken>()),
                 Times.Once,
-                "Логіка Echo не спрацювала: WriteAsync не викликано з вхідними даними."
+                "Логіка Echo не спрацювала: WriteAsync не викликано з коректними даними."
             );
 
             mockClient.Verify(c => c.Close(), Times.Once, "З'єднання має бути закрито після завершення обробки.");
@@ -137,7 +148,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
             MethodInfo handleClientMethod = server.GetType().GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance);
             await (Task)handleClientMethod.Invoke(server, new object[] { mockClient.Object, CancellationToken.None });
 
-            _mockLogger.Verify(l => l.LogError(It.Is<string>(s => s.Contains("Client handler error: Test Network Error"))), Times.Once, "Виняток HandleClientAsync не був залогований як помилка.");
+            _mockLogger.Verify(l => l.LogError(Is.StringContaining("Client handler error: Test Network Error")), Times.Once, "Виняток HandleClientAsync не був залогований як помилка.");
             mockClient.Verify(c => c.Close(), Times.Once, "З'єднання має бути закрито навіть після помилки.");
         }
 
@@ -152,9 +163,25 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
             var mockStream = new Mock<INetworkStreamWrapper>();
             var mockClient = new Mock<ITcpClientWrapper>();
 
-            mockStream.SetupSequence(s => s.ReadAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(bytes1.Length)
-                .ReturnsAsync(bytes2.Length)
+            // ВИПРАВЛЕННЯ: Налаштовуємо Setup Sequence з Callback
+            mockStream.SetupSequence(s => s.ReadAsync(
+                It.IsAny<byte[]>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()))
+                // 1. Перше читання
+                .Returns(new Func<byte[], int, int, CancellationToken, Task<int>>((buffer, offset, count, token) =>
+                {
+                    Array.Copy(bytes1, 0, buffer, offset, bytes1.Length);
+                    return Task.FromResult(bytes1.Length);
+                }))
+                // 2. Друге читання
+                .Returns(new Func<byte[], int, int, CancellationToken, Task<int>>((buffer, offset, count, token) =>
+                {
+                    Array.Copy(bytes2, 0, buffer, offset, bytes2.Length);
+                    return Task.FromResult(bytes2.Length);
+                }))
+                // 3. Кінець потоку
                 .ReturnsAsync(0);
 
             mockClient.Setup(c => c.GetStream()).Returns(mockStream.Object);
@@ -164,8 +191,10 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
             await (Task)handleClientMethod.Invoke(server, new object[] { mockClient.Object, CancellationToken.None });
 
             mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Exactly(2), "WriteAsync має бути викликаний для кожної частини даних.");
-            _mockLogger.Verify(l => l.Log(It.Is<string>(s => s.Contains(messagePart1))), Times.Once, "Перша частина не залогована.");
-            _mockLogger.Verify(l => l.Log(It.Is<string>(s => s.Contains(messagePart2))), Times.Once, "Друга частина не залогована.");
+
+            // Перевіряємо логування (тепер, коли дані не порожні)
+            _mockLogger.Verify(l => l.Log(Is.StringContaining(messagePart1)), Times.Once, "Перша частина не залогована.");
+            _mockLogger.Verify(l => l.Log(Is.StringContaining(messagePart2)), Times.Once, "Друга частина не залогована.");
         }
     }
 }

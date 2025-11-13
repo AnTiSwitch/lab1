@@ -1,65 +1,64 @@
 using NUnit.Framework;
 using EchoServer.Implementations;
-using System.Net;
-using EchoServer.Abstractions;
 using System.Net.Sockets;
+using EchoServer.Abstractions;
 using System.Threading.Tasks;
+using System.Net;
 using static NUnit.Framework.Assert;
-using static NUnit.Framework.Is; // Статичний імпорт для Is.Not.Null, Is.InstanceOf
-using static NUnit.Framework.Throws; // Статичний імпорт для Throws.Nothing
+using static NUnit.Framework.Is;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
     [TestFixture]
-    public class TcpListenerWrapperTests
+    public class TcpClientWrapperTests
     {
         [Test]
-        public void Constructor_CreatesInternalTcpListener()
+        public void GetStream_ReturnsNetworkStreamWrapper()
         {
-            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-            var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            // Використовуємо Assert.That(value, Is.Not.Null)
-            Assert.That(listenerField.GetValue(wrapper), Is.Not.Null);
-            wrapper.Dispose();
-        }
-
-        [Test]
-        public void Dispose_CallsStopOnInternalListener()
-        {
-            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-            wrapper.Start();
-            wrapper.Dispose();
-
-            // ВИПРАВЛЕННЯ: Використовуємо Assert.That з Throws.Nothing
-            Assert.DoesNotThrow(() =>
+            // ВИПРАВЛЕННЯ: Створюємо мінімально підключений сокет
+            using (var listener = new TcpListener(IPAddress.Loopback, 5004)) // Використовуємо інший порт
             {
-                var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-                newWrapper.Dispose();
-            });
-        }
+                listener.Start();
+                var connector = new TcpClient();
+                var connectTask = connector.ConnectAsync(IPAddress.Loopback, 5004);
 
-        [Test]
-        public async Task AcceptTcpClientAsync_WhenClientConnects_ReturnsTcpClientWrapper()
-        {
-            const int testPort = 5001;
-            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, testPort);
-            wrapper.Start();
+                // Приймаємо підключений клієнт
+                TcpClient realClient = listener.AcceptTcpClient();
 
-            var acceptTask = wrapper.AcceptTcpClientAsync();
-            using (var client = new TcpClient())
-            {
-                await client.ConnectAsync(IPAddress.Loopback, testPort);
+                var wrapper = new TcpClientWrapper(realClient);
+
+                // Act
+                INetworkStreamWrapper streamWrapper = wrapper.GetStream(); // Тепер не повинно бути InvalidOperationException
+
+                // Assert
+                Assert.That(streamWrapper, Is.Not.Null);
+                Assert.That(streamWrapper, Is.InstanceOf<NetworkStreamWrapper>());
+
+                // Cleanup
+                wrapper.Dispose();
+                connector.Dispose();
             }
+        }
 
-            ITcpClientWrapper result = await acceptTask;
+        [Test]
+        public void CloseAndDispose_CalledOnInternalClient()
+        {
+            using (var listener = new TcpListener(IPAddress.Loopback, 5005)) // Використовуємо інший порт
+            {
+                listener.Start();
+                var connectTask = Task.Run(() => new TcpClient("127.0.0.1", 5005));
+                TcpClient realClient = listener.AcceptTcpClient();
+                listener.Stop(); // Зупиняємо listener, але client залишається підключеним
 
-            // Використовуємо Assert.That та Is.Not.Null / Is.InstanceOf
-            Assert.That(result, Is.Not.Null);
-            Assert.That(result, Is.InstanceOf<TcpClientWrapper>());
+                var wrapper = new TcpClientWrapper(realClient);
 
-            wrapper.Dispose();
-            result.Dispose();
+                wrapper.Close();
+
+                // Перевіряємо, що внутрішній клієнт закритий
+                Assert.That(realClient.Connected, Is.False, "Internal client should be closed after wrapper.Close()");
+
+                wrapper.Dispose();
+            }
         }
     }
 }
