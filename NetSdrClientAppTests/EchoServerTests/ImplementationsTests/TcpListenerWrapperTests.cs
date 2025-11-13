@@ -31,7 +31,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Start();
             wrapper.Dispose();
 
-            // Виправлення CS0119: Використовуємо Assert.That з Throws.Nothing, який тепер імпортовано статично.
+            // ВИПРАВЛЕННЯ: Використовуємо Assert.That з Throws.Nothing
             Assert.That(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
