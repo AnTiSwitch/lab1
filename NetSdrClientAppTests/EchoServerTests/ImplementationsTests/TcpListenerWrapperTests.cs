@@ -32,11 +32,11 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Dispose();
 
             // ÂÈÏÐÀÂËÅÍÍß: Âèêîðèñòîâóºìî Assert.That ç Throws.Nothing
-            Assert.That(() =>
+            Assert.DoesNotThrow(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
                 newWrapper.Dispose();
-            }, Is.Not.Throwing);
+            });
         }
 
         [Test]
