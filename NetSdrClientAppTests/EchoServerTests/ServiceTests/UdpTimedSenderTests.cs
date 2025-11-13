@@ -22,7 +22,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
         [Test]
         public void Constructor_NullLogger_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>(() => new UdpTimedSender("127.0.0.1", 60000, null));
+            Assert.Throws<ArgumentNullException>(() => new UdpTimedSender("127.0.0.1", 60000, null!));
         }
 
         [TestCase(0)]
