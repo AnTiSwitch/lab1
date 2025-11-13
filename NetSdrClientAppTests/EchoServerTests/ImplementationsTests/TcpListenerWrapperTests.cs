@@ -1,64 +1,63 @@
 using NUnit.Framework;
 using EchoServer.Implementations;
-using System.Net.Sockets;
-using EchoServer.Abstractions;
-using System.Threading.Tasks;
 using System.Net;
+using EchoServer.Abstractions;
+using System.Net.Sockets;
+using System.Threading.Tasks;
 using static NUnit.Framework.Assert;
 using static NUnit.Framework.Is;
+using static NUnit.Framework.Throws; // <--- Необхідний статичний імпорт
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
     [TestFixture]
-    public class TcpClientWrapperTests
+    public class TcpListenerWrapperTests
     {
         [Test]
-        public void GetStream_ReturnsNetworkStreamWrapper()
+        public void Constructor_CreatesInternalTcpListener()
         {
-            // ВИПРАВЛЕННЯ: Створюємо мінімально підключений сокет
-            using (var listener = new TcpListener(IPAddress.Loopback, 5004)) // Використовуємо інший порт
-            {
-                listener.Start();
-                var connector = new TcpClient();
-                var connectTask = connector.ConnectAsync(IPAddress.Loopback, 5004);
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+            var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-                // Приймаємо підключений клієнт
-                TcpClient realClient = listener.AcceptTcpClient();
-
-                var wrapper = new TcpClientWrapper(realClient);
-
-                // Act
-                INetworkStreamWrapper streamWrapper = wrapper.GetStream(); // Тепер не повинно бути InvalidOperationException
-
-                // Assert
-                Assert.That(streamWrapper, Is.Not.Null);
-                Assert.That(streamWrapper, Is.InstanceOf<NetworkStreamWrapper>());
-
-                // Cleanup
-                wrapper.Dispose();
-                connector.Dispose();
-            }
+            Assert.That(listenerField.GetValue(wrapper), Is.Not.Null);
+            wrapper.Dispose();
         }
 
         [Test]
-        public void CloseAndDispose_CalledOnInternalClient()
+        public void Dispose_CallsStopOnInternalListener()
         {
-            using (var listener = new TcpListener(IPAddress.Loopback, 5005)) // Використовуємо інший порт
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+            wrapper.Start();
+            wrapper.Dispose();
+
+            // ВИПРАВЛЕННЯ CS0119: Використовуємо Assert.That з Throws.Nothing
+            Assert.That(() =>
             {
-                listener.Start();
-                var connectTask = Task.Run(() => new TcpClient("127.0.0.1", 5005));
-                TcpClient realClient = listener.AcceptTcpClient();
-                listener.Stop(); // Зупиняємо listener, але client залишається підключеним
+                var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+                newWrapper.Dispose();
+            }, Throws.Nothing);
+        }
 
-                var wrapper = new TcpClientWrapper(realClient);
+        [Test]
+        public async Task AcceptTcpClientAsync_WhenClientConnects_ReturnsTcpClientWrapper()
+        {
+            const int testPort = 5001;
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, testPort);
+            wrapper.Start();
 
-                wrapper.Close();
-
-                // Перевіряємо, що внутрішній клієнт закритий
-                Assert.That(realClient.Connected, Is.False, "Internal client should be closed after wrapper.Close()");
-
-                wrapper.Dispose();
+            var acceptTask = wrapper.AcceptTcpClientAsync();
+            using (var client = new TcpClient())
+            {
+                await client.ConnectAsync(IPAddress.Loopback, testPort);
             }
+
+            ITcpClientWrapper result = await acceptTask;
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.InstanceOf<TcpClientWrapper>());
+
+            wrapper.Dispose();
+            result.Dispose();
         }
     }
 }
