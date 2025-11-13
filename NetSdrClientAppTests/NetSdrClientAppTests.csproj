@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NetSdrClientApp\NetSdrClientApp.csproj" />
+    <ProjectReference Include="..\EchoTcpServer\EchoServer.csproj" />
   </ItemGroup>
 
   <ItemGroup>
