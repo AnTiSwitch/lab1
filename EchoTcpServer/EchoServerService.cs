@@ -13,9 +13,10 @@ namespace EchoServer
         private readonly int _port;
         private readonly ILogger _logger;
         private readonly ITcpListenerFactory _listenerFactory;
+
         private readonly CancellationTokenSource _cancellationTokenSource;
 
-        private ITcpListenerWrapper _listener;
+        private ITcpListenerWrapper _listener=default!;
 
         // DI: Залежності передаються через конструктор
         public EchoServerService(int port, ILogger logger, ITcpListenerFactory listenerFactory)

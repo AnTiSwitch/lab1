@@ -13,7 +13,7 @@ namespace EchoServer
         private readonly int _port;
         private readonly ILogger _logger;
         private readonly UdpClient _udpClient;
-        private Timer _timer;
+        private Timer _timer=default!;
         private int _messageCounter;
 
         // DI: Залежність ILogger передається через конструктор

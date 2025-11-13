@@ -6,7 +6,7 @@ using EchoServer.Implementations;
 
 namespace EchoServer
 {
-    class Program
+    static class Program
     {
         static async Task Main(string[] args)
         {

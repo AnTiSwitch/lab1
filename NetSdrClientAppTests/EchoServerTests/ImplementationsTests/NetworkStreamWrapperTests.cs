@@ -22,7 +22,6 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             // Перевизначаємо ключові методи для використання MemoryStream
             public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _baseStream.ReadAsync(buffer, offset, count, cancellationToken);
             public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _baseStream.WriteAsync(buffer, offset, count, cancellationToken);
-            public override void Dispose() => _baseStream.Dispose();
         }
 
         [Test]
