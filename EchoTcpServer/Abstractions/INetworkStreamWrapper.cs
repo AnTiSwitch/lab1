@@ -1,0 +1,13 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace EchoServer.Abstractions
+{
+    // Обгортка для NetworkStream
+    public interface INetworkStreamWrapper : IDisposable
+    {
+        Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token);
+        Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token);
+    }
+}

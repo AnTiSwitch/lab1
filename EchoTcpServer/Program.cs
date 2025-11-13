@@ -1,172 +1,56 @@
 ﻿using System;
 using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using EchoServer.Abstractions;
+using EchoServer.Implementations;
 
 namespace EchoServer
 {
-    public class EchoServer
+    class Program
     {
-        private readonly int _port;
-        private TcpListener _listener;
-        private CancellationTokenSource _cancellationTokenSource;
-
-        //constuctor
-        public EchoServer(int port)
+        static async Task Main(string[] args)
         {
-            _port = port;
-            _cancellationTokenSource = new CancellationTokenSource();
-        }
+            // === Composition Root: Створення об'єктів та впровадження залежностей ===
 
-        public async Task StartAsync()
-        {
-            _listener = new TcpListener(IPAddress.Any, _port);
-            _listener.Start();
-            Console.WriteLine($"Server started on port {_port}.");
+            // 1. Створення залежностей
+            // Використовуємо конкретні реалізації (Impl)
+            ILogger logger = new ConsoleLogger();
+            ITcpListenerFactory factory = new TcpListenerFactory();
 
-            while (!_cancellationTokenSource.Token.IsCancellationRequested)
+            // Порти за замовчуванням
+            const int tcpPort = 5000;
+            const int udpPort = 60000;
+
+            // 2. Створення сервісів, передаючи залежності (DI)
+            EchoServerService server = new EchoServerService(tcpPort, logger, factory);
+            UdpTimedSender sender = new UdpTimedSender("127.0.0.1", udpPort, logger);
+
+            // 3. Запуск сервісів
+            // TCP server запускаємо у фоновому завданні
+            Task serverTask = Task.Run(() => server.StartAsync());
+
+            // UDP sender запускаємо з інтервалом 5000 мс (5 сек)
+            sender.StartSending(5000);
+
+            // 4. Очікування команди на завершення
+            Console.WriteLine("Server is running. Press 'q' to quit.");
+
+            // Блокуємо головний потік до натискання 'q'
+            while (Console.ReadKey(true).Key != ConsoleKey.Q)
             {
-                try
-                {
-                    TcpClient client = await _listener.AcceptTcpClientAsync();
-                    Console.WriteLine("Client connected.");
-
-                    _ = Task.Run(() => HandleClientAsync(client, _cancellationTokenSource.Token));
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Listener has been closed
-                    break;
-                }
+                // Запобігання блокуванню процесора
+                await Task.Delay(100);
             }
 
-            Console.WriteLine("Server shutdown.");
-        }
+            // 5. Коректна зупинка
+            Console.WriteLine("\nShutting down...");
+            server.Stop(); // Викликаємо скасування токена та зупинку listener
+            sender.Dispose(); // Зупиняємо таймер і закриваємо UDP клієнт
 
-        private async Task HandleClientAsync(TcpClient client, CancellationToken token)
-        {
-            using (NetworkStream stream = client.GetStream())
-            {
-                try
-                {
-                    byte[] buffer = new byte[8192];
-                    int bytesRead;
+            // Очікуємо завершення роботи сервера
+            await serverTask;
 
-                    while (!token.IsCancellationRequested && (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
-                    {
-                        // Echo back the received message
-                        await stream.WriteAsync(buffer, 0, bytesRead, token);
-                        Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
-                    }
-                }
-                catch (Exception ex) when (!(ex is OperationCanceledException))
-                {
-                    Console.WriteLine($"Error: {ex.Message}");
-                }
-                finally
-                {
-                    client.Close();
-                    Console.WriteLine("Client disconnected.");
-                }
-            }
-        }
-
-        public void Stop()
-        {
-            _cancellationTokenSource.Cancel();
-            _listener.Stop();
-            _cancellationTokenSource.Dispose();
-            Console.WriteLine("Server stopped.");
-        }
-
-        public static async Task Main(string[] args)
-        {
-            EchoServer server = new EchoServer(5000);
-
-            // Start the server in a separate task
-            _ = Task.Run(() => server.StartAsync());
-
-            string host = "127.0.0.1"; // Target IP
-            int port = 60000;          // Target Port
-            int intervalMilliseconds = 5000; // Send every 3 seconds
-
-            using (var sender = new UdpTimedSender(host, port))
-            {
-                Console.WriteLine("Press any key to stop sending...");
-                sender.StartSending(intervalMilliseconds);
-
-                Console.WriteLine("Press 'q' to quit...");
-                while (Console.ReadKey(intercept: true).Key != ConsoleKey.Q)
-                {
-                    // Just wait until 'q' is pressed
-                }
-
-                sender.StopSending();
-                server.Stop();
-                Console.WriteLine("Sender stopped.");
-            }
-        }
-    }
-
-
-    public class UdpTimedSender : IDisposable
-    {
-        private readonly string _host;
-        private readonly int _port;
-        private readonly UdpClient _udpClient;
-        private Timer _timer;
-
-        public UdpTimedSender(string host, int port)
-        {
-            _host = host;
-            _port = port;
-            _udpClient = new UdpClient();
-        }
-
-        public void StartSending(int intervalMilliseconds)
-        {
-            if (_timer != null)
-                throw new InvalidOperationException("Sender is already running.");
-
-            _timer = new Timer(SendMessageCallback, null, 0, intervalMilliseconds);
-        }
-
-        ushort i = 0;
-
-        private void SendMessageCallback(object state)
-        {
-            try
-            {
-                //dummy data
-                Random rnd = new Random();
-                byte[] samples = new byte[1024];
-                rnd.NextBytes(samples);
-                i++;
-
-                byte[] msg = (new byte[] { 0x04, 0x84 }).Concat(BitConverter.GetBytes(i)).Concat(samples).ToArray();
-                var endpoint = new IPEndPoint(IPAddress.Parse(_host), _port);
-
-                _udpClient.Send(msg, msg.Length, endpoint);
-                Console.WriteLine($"Message sent to {_host}:{_port} ");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error sending message: {ex.Message}");
-            }
-        }
-
-        public void StopSending()
-        {
-            _timer?.Dispose();
-            _timer = null;
-        }
-
-        public void Dispose()
-        {
-            StopSending();
-            _udpClient.Dispose();
+            logger.Log("Application exited.");
         }
     }
 }
