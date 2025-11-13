@@ -16,7 +16,7 @@ namespace EchoServer
 
         private readonly CancellationTokenSource _cancellationTokenSource;
 
-        private ITcpListenerWrapper _listener=default!;
+        private ITcpListenerWrapper _listener = default!;
 
         // DI: Залежності передаються через конструктор
         public EchoServerService(int port, ILogger logger, ITcpListenerFactory listenerFactory)
@@ -66,6 +66,7 @@ namespace EchoServer
             finally
             {
                 _listener?.Dispose();
+                // Звільнення CancellationTokenSource тепер відбувається у Stop()
             }
         }
 
@@ -113,6 +114,10 @@ namespace EchoServer
         {
             _cancellationTokenSource.Cancel();
             _listener?.Stop(); // Примусова зупинка AcceptTcpClientAsync
+
+            // ВИПРАВЛЕННЯ S2930: Утилізація CancellationTokenSource
+            _cancellationTokenSource.Dispose();
+
             _logger.Log("Stopping TCP Echo Server...");
         }
     }

@@ -4,6 +4,7 @@ using System.Net;
 using EchoServer.Abstractions;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {

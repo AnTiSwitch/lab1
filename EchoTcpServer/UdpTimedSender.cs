@@ -7,14 +7,21 @@ using EchoServer.Abstractions;
 
 namespace EchoServer
 {
+    // Цей клас потребує IDisposable (S3881)
     public class UdpTimedSender : IDisposable
     {
         private readonly string _host;
         private readonly int _port;
         private readonly ILogger _logger;
         private readonly UdpClient _udpClient;
-        private Timer _timer=default!;
+
+        private Timer _timer = default!; // Виправлення CS8618
         private int _messageCounter;
+
+        // ДОДАНО: Прапорець для відстеження стану утилізації
+        private bool _disposed = false;
+
+        // ... (Конструктор, StartSending, SendMessageCallback залишаються без змін)
 
         // DI: Залежність ILogger передається через конструктор
         public UdpTimedSender(string host, int port, ILogger logger)
@@ -29,7 +36,6 @@ namespace EchoServer
 
         public void StartSending(int intervalMilliseconds)
         {
-            // Створення таймера, який буде викликати SendMessageCallback кожні intervalMilliseconds
             _timer = new Timer(SendMessageCallback, null, 0, intervalMilliseconds);
             _logger.Log($"UDP Sender started, sending every {intervalMilliseconds}ms to {_host}:{_port}");
         }
@@ -42,7 +48,6 @@ namespace EchoServer
                 string message = $"UDP broadcast: Message {_messageCounter}";
                 byte[] data = Encoding.UTF8.GetBytes(message);
 
-                // Відправка UDP пакета
                 _udpClient.Send(data, data.Length, _host, _port);
 
                 _logger.Log($"UDP sent: {message}");
@@ -53,12 +58,38 @@ namespace EchoServer
             }
         }
 
+        // ПОВНИЙ ШАБЛОН IDISPOSABLE:
+
+        // 1. Публічний метод Dispose
         public void Dispose()
         {
-            _timer?.Dispose();
-            _udpClient.Close();
-            _udpClient.Dispose();
-            _logger.Log("UDP Sender disposed.");
+            Dispose(true);
+            // Викликати GC.SuppressFinalize, якщо очищення було успішним
+            GC.SuppressFinalize(this);
+        }
+
+        // 2. Захищений метод Dispose(bool)
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Очищення керованих ресурсів: Timer та UdpClient
+                    _timer?.Dispose();
+                    _udpClient?.Close();
+                    _udpClient?.Dispose();
+                    _logger.Log("UDP Sender disposed."); // Логування зупинки
+                }
+
+                _disposed = true;
+            }
+        }
+
+        // 3. Фіналізатор (забезпечує очищення, якщо Dispose не викликано)
+        ~UdpTimedSender()
+        {
+            Dispose(false);
         }
     }
 }

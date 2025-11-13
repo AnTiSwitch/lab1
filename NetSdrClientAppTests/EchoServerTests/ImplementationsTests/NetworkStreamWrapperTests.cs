@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Threading;
 using System.Net;
+using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {

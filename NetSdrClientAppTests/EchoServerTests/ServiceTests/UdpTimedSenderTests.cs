@@ -4,6 +4,7 @@ using EchoServer;
 using EchoServer.Abstractions;
 using System;
 using System.Threading;
+using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
 {
@@ -45,12 +46,12 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
         }
 
         [Test]
-        public void StartSending_ShouldLogMessageSentAfterDelay()
+        public async Task StartSending_ShouldLogMessageSentAfterDelay()
         {
             var sender = new UdpTimedSender("127.0.0.1", 60000, _mockLogger.Object);
 
             sender.StartSending(100);
-            Thread.Sleep(250);
+            await Task.Delay(250);
             sender.Dispose();
 
             _mockLogger.Verify(

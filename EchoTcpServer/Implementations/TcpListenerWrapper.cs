@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -9,6 +10,7 @@ namespace EchoServer.Implementations
     public class TcpListenerWrapper : ITcpListenerWrapper
     {
         private readonly TcpListener _listener;
+        private bool _disposed = false; // Додаємо прапорець для відстеження
 
         public TcpListenerWrapper(IPAddress address, int port)
         {
@@ -17,6 +19,7 @@ namespace EchoServer.Implementations
 
         public void Start()
         {
+            // Перевірка стану не потрібна, якщо використовується Dispose
             _listener.Start();
         }
 
@@ -34,10 +37,36 @@ namespace EchoServer.Implementations
             return new TcpClientWrapper(client);
         }
 
+        // 1. Публічний метод Dispose (викликає захищений)
         public void Dispose()
         {
-            // Stop() виконує dispose
-            Stop();
+            Dispose(true);
+            // Запобігаємо повторному виконанню фіналізатора
+            GC.SuppressFinalize(this);
+        }
+
+        // 2. Захищений метод Dispose(bool)
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
+                    // Очищення керованих ресурсів: TcpListener
+                    // Викликаємо Stop(), який утилізує ресурси
+                    Stop();
+                }
+
+                // Очищення некерованих ресурсів (відсутні)
+
+                _disposed = true;
+            }
+        }
+
+        // 3. Фіналізатор
+        ~TcpListenerWrapper()
+        {
+            Dispose(false);
         }
     }
 }

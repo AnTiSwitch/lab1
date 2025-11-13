@@ -2,6 +2,7 @@ using NUnit.Framework;
 using EchoServer.Implementations;
 using System;
 using System.IO;
+using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {

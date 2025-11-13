@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Text;
 using System.Net.Sockets;
 using System.Reflection;
+using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
 {
@@ -83,9 +84,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
             mockClient.Setup(c => c.GetStream()).Returns(mockStream.Object);
             var server = new EchoServerService(5000, _mockLogger.Object, _mockFactory.Object);
 
-            MethodInfo handleClientMethod = server.GetType().GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo handleClientMethod = server.GetType().GetMethod("HandleClientAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
 
-            await (Task)handleClientMethod.Invoke(server, new object[] { mockClient.Object, CancellationToken.None });
+            await (Task)handleClientMethod.Invoke(server, new object[] { mockClient.Object, CancellationToken.None })!;
 
             mockStream.Verify(
                 s => s.WriteAsync(
