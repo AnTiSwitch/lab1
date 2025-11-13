@@ -40,7 +40,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
                 Assert.That(realClient.Connected, Is.False, "Internal client should be closed after wrapper.Close()");
 
-                wrapper.Dispose()
+                wrapper.Dispose();
             }
         }
     }

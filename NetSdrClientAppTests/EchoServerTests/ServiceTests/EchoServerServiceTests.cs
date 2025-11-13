@@ -33,8 +33,8 @@ namespace NetSdrClientAppTests.EchoServerTests.ServiceTests
         [Test]
         public void Constructor_NullDependencies_ThrowsArgumentNullException()
         {
-            Assert.Throws<ArgumentNullException>(() => new EchoServerService(5000, null, _mockFactory.Object));
-            Assert.Throws<ArgumentNullException>(() => new EchoServerService(5000, _mockLogger.Object, null));
+            Assert.Throws<ArgumentNullException>(() => new EchoServerService(5000, null!, _mockFactory.Object));
+            Assert.Throws<ArgumentNullException>(() => new EchoServerService(5000, _mockLogger.Object, null!));
         }
 
         [Test]
