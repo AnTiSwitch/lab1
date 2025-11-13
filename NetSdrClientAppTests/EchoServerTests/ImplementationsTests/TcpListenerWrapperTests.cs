@@ -4,9 +4,6 @@ using System.Net;
 using EchoServer.Abstractions;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using static NUnit.Framework.Assert;
-using static NUnit.Framework.Is;
-using static NUnit.Framework.Throws; // <--- Необхідний статичний імпорт
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
@@ -30,7 +27,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Start();
             wrapper.Dispose();
 
-            // ВИПРАВЛЕННЯ CS0119: Використовуємо Assert.That з Throws.Nothing
+            // Використовуємо Assert.That з Throws.Nothing (без проблемних static using)
             Assert.That(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
