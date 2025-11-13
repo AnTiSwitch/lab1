@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Threading.Tasks;
 using static NUnit.Framework.Assert;
 using NUnit.Framework.Constraints;
+using static NUnit.Framework.Throws;
 
 // Додаємо статичний імпорт для Is, Throws
 using static NUnit.Framework.Is;
@@ -35,12 +36,11 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Start();
             wrapper.Dispose();
 
-            // ВИПРАВЛЕНО CS0119: Використовуємо Throws.Nothing усередині Assert.That
             Assert.That(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
                 newWrapper.Dispose();
-            }, Throws.Nothing);
+            }, Throws.Nothing); 
         }
 
         [Test]
