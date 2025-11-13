@@ -5,14 +5,16 @@ using System.Threading.Tasks;
 using System.IO;
 using System.Threading;
 using System.Net;
-using static NUnit.Framework.Assert;
+using static NUnit.Framework.Assert; // Залишаємо
+using NUnit.Framework.Constraints;
+using NUnit.Framework.Internal; // Додаємо для Is.EqualTo
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
     [TestFixture]
     public class NetworkStreamWrapperTests
     {
-        // Допоміжний клас для імітації NetworkStream
+        // Допоміжний клас залишається без змін...
         private class MockNetworkStream : NetworkStream
         {
             private readonly Stream _baseStream;
@@ -20,7 +22,6 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             {
                 _baseStream = baseStream;
             }
-            // Перевизначаємо ключові методи для використання MemoryStream
             public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _baseStream.ReadAsync(buffer, offset, count, cancellationToken);
             public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _baseStream.WriteAsync(buffer, offset, count, cancellationToken);
         }
@@ -35,8 +36,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
                 var buffer = new byte[5];
                 int bytesRead = await wrapper.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None);
 
-                AreEqual(3, bytesRead);
-                AreEqual(1, buffer[0]);
+                // ВИПРАВЛЕНО: Використовуємо Assert.That
+                Assert.That(bytesRead, Is.EqualTo(3));
+                Assert.That(buffer[0], Is.EqualTo(1));
             }
         }
 
@@ -50,9 +52,10 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
                 await wrapper.WriteAsync(testData, 0, testData.Length, CancellationToken.None);
 
-                AreEqual(2, memoryStream.Length);
+                // ВИПРАВЛЕНО: Використовуємо Assert.That
+                Assert.That(memoryStream.Length, Is.EqualTo(2));
                 memoryStream.Position = 0;
-                AreEqual(4, memoryStream.ReadByte());
+                Assert.That(memoryStream.ReadByte(), Is.EqualTo(4));
             }
         }
     }

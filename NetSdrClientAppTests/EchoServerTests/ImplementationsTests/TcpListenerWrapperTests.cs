@@ -4,6 +4,7 @@ using System.Net;
 using EchoServer.Abstractions;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using NUnit.Framework.Constraints;
 using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
@@ -17,7 +18,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
             var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-            IsNotNull(listenerField.GetValue(wrapper));
+            Assert.That(listenerField.GetValue(wrapper), Is.Not.Null);
             wrapper.Dispose();
         }
 
@@ -28,11 +29,11 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             wrapper.Start();
             wrapper.Dispose();
 
-            DoesNotThrow(() =>
+            Assert.That(() =>
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
                 newWrapper.Dispose();
-            });
+            }, Throws.Nothing);
         }
 
         [Test]

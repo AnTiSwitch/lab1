@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using NUnit.Framework.Constraints;
 using EchoServer.Implementations;
 using System.Net.Sockets;
 using EchoServer.Abstractions;
@@ -18,8 +19,8 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             var wrapper = new TcpClientWrapper(realClient);
             INetworkStreamWrapper streamWrapper = wrapper.GetStream();
 
-            IsNotNull(streamWrapper);
-            IsInstanceOf<NetworkStreamWrapper>(streamWrapper);
+            Assert.That(streamWrapper, Is.Not.Null);
+            Assert.That(streamWrapper, Is.InstanceOf<NetworkStreamWrapper>());
             wrapper.Dispose();
         }
 
@@ -37,9 +38,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
                 wrapper.Close();
 
-                IsFalse(realClient.Connected, "Internal client should be closed after wrapper.Close()");
+                Assert.That(realClient.Connected, Is.False, "Internal client should be closed after wrapper.Close()");
 
-                wrapper.Dispose();
+                wrapper.Dispose()
             }
         }
     }

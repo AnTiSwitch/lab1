@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using EchoServer.Implementations;
 using System.Net;
+using NUnit.Framework.Constraints;
 using EchoServer.Abstractions;
 using static NUnit.Framework.Assert;
 
@@ -14,8 +15,8 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
         {
             var factory = new TcpListenerFactory();
             var listener = factory.Create(IPAddress.Loopback, 5000);
-            IsNotNull(listener);
-            IsInstanceOf<TcpListenerWrapper>(listener);
+            Assert.That(listener, Is.Not.Null);
+            Assert.That(listener, Is.InstanceOf<TcpListenerWrapper>());
         }
     }
 }
