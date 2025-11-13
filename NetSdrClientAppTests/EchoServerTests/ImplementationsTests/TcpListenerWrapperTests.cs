@@ -36,7 +36,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             {
                 var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
                 newWrapper.Dispose();
-            }, Throws.Nothing);
+            }, Is.Not.Throwing);
         }
 
         [Test]
