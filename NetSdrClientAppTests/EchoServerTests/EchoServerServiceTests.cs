@@ -22,7 +22,7 @@ namespace NetSdrClientAppTests
             _mockLogger = new Mock<ILogger>();
             _mockListenerFactory = new Mock<ITcpListenerFactory>();
             _mockListener = new Mock<ITcpListenerWrapper>();
-            
+
             _mockListenerFactory
                 .Setup(f => f.Create(It.IsAny<System.Net.IPAddress>(), It.IsAny<int>()))
                 .Returns(_mockListener.Object);
@@ -41,9 +41,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.ReadAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync((byte[] buffer, int offset, int count, CancellationToken token) =>
                 {
@@ -58,9 +58,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.WriteAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .Callback<byte[], int, int, CancellationToken>((buffer, offset, count, token) =>
                 {
@@ -93,9 +93,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.ReadAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(0);
 
@@ -110,10 +110,10 @@ namespace NetSdrClientAppTests
             // Assert
             mockStream.Verify(
                 s => s.WriteAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<CancellationToken>()), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()),
                 Times.Never);
             _mockLogger!.Verify(l => l.Log("Client disconnected."), Times.Once);
         }
@@ -127,9 +127,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.ReadAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Network error"));
 
@@ -159,9 +159,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.ReadAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync((byte[] buffer, int offset, int count, CancellationToken token) =>
                 {
@@ -183,9 +183,9 @@ namespace NetSdrClientAppTests
             int writeCount = 0;
             mockStream
                 .Setup(s => s.WriteAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .Callback(() => writeCount++)
                 .Returns(Task.CompletedTask);
@@ -235,9 +235,9 @@ namespace NetSdrClientAppTests
 
             mockStream
                 .Setup(s => s.ReadAsync(
-                    It.IsAny<byte[]>(), 
-                    It.IsAny<int>(), 
-                    It.IsAny<int>(), 
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(5);
 

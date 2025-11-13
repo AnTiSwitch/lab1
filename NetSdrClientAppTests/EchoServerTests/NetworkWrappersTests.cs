@@ -1,118 +1,152 @@
 using System;
-using System.Net;
-using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using EchoServer.Abstractions;
+using EchoServer.Services;
 using FluentAssertions;
+using Moq;
 using NUnit.Framework;
 
 namespace NetSdrClientAppTests
 {
     [TestFixture]
-    public class NetworkWrappersTests
+    public class UdpTimedSenderTests
     {
-        [Test]
-        public void TcpListenerFactory_ShouldCreateListener()
+        private Mock<ILogger>? _mockLogger;
+
+        [SetUp]
+        public void SetUp()
         {
-            // Arrange
-            var factory = new TcpListenerFactory();
-
-            // Act
-            using var listener = factory.Create(IPAddress.Loopback, 0);
-
-            // Assert
-            listener.Should().NotBeNull();
-            listener.Should().BeAssignableTo<ITcpListenerWrapper>();
+            _mockLogger = new Mock<ILogger>();
         }
 
         [Test]
-        public void ConsoleLogger_ShouldNotThrow()
-        {
-            // Arrange
-            var logger = new ConsoleLogger();
-
-            // Act & Assert
-            Action actLog = () => logger.Log("Test message");
-            Action actError = () => logger.LogError("Test error");
-
-            actLog.Should().NotThrow();
-            actError.Should().NotThrow();
-        }
-
-        [Test]
-        public void NetworkStreamWrapper_ShouldImplementInterface()
+        public void Constructor_ShouldThrowException_WhenLoggerIsNull()
         {
             // Arrange & Act
-            var wrapperType = typeof(NetworkStreamWrapper);
+            Action act = () => _ = new UdpTimedSender("127.0.0.1", 5000, null!);
 
             // Assert
-            wrapperType.Should().NotBeNull();
-            wrapperType.GetInterfaces().Should().Contain(typeof(INetworkStreamWrapper));
+            act.Should().Throw<ArgumentNullException>()
+                .WithParameterName("logger");
         }
 
         [Test]
-        public void TcpListenerWrapper_ShouldStartAndStop()
+        public void StartSending_ShouldThrowException_WhenAlreadyRunning()
         {
             // Arrange
-            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 0);
+            using var sender = new UdpTimedSender("127.0.0.1", 5000, _mockLogger!.Object);
+            sender.StartSending(1000);
 
             // Act
-            Action startAct = () => wrapper.Start();
-            Action stopAct = () => wrapper.Stop();
+            Action act = () => sender.StartSending(1000);
 
             // Assert
-            startAct.Should().NotThrow();
-            stopAct.Should().NotThrow();
-            wrapper.Dispose();
+            act.Should().Throw<InvalidOperationException>()
+                .WithMessage("Sender is already running.");
+
+            sender.StopSending();
         }
 
         [Test]
-        public void TcpClientWrapper_ShouldImplementInterface()
-        {
-            // Arrange & Act
-            var wrapperType = typeof(TcpClientWrapper);
-
-            // Assert
-            wrapperType.Should().Implement<ITcpClientWrapper>();
-        }
-
-        [Test]
-        public void TcpListenerFactory_ShouldCreateMultipleListeners()
+        public void StopSending_ShouldNotThrow_WhenNotStarted()
         {
             // Arrange
-            var factory = new TcpListenerFactory();
+            using var sender = new UdpTimedSender("127.0.0.1", 5000, _mockLogger!.Object);
 
             // Act
-            using var listener1 = factory.Create(IPAddress.Loopback, 0);
-            using var listener2 = factory.Create(IPAddress.Loopback, 0);
+            Action act = () => sender.StopSending();
 
             // Assert
-            listener1.Should().NotBeNull();
-            listener2.Should().NotBeNull();
-            listener1.Should().NotBeSameAs(listener2);
-        }
-
-        [Test]
-        public void ConsoleLogger_ShouldLogErrorWithPrefix()
-        {
-            // Arrange
-            var logger = new ConsoleLogger();
-
-            // Act & Assert
-            Action act = () => logger.LogError("Critical error");
             act.Should().NotThrow();
         }
 
         [Test]
-        public void TcpListenerWrapper_Dispose_ShouldNotThrow()
+        public void Dispose_ShouldStopTimer()
         {
             // Arrange
-            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 0);
-            wrapper.Start();
+            var sender = new UdpTimedSender("127.0.0.1", 5000, _mockLogger!.Object);
+            sender.StartSending(1000);
 
             // Act
-            Action act = () => wrapper.Dispose();
+            sender.Dispose();
 
             // Assert
+            Action act = () => sender.Dispose();
+            act.Should().NotThrow();
+        }
+
+        [Test]
+        public async Task StartSending_ShouldLogMessages()
+        {
+            // Arrange
+            using var sender = new UdpTimedSender("127.0.0.1", 60000, _mockLogger!.Object);
+
+            // Act
+            sender.StartSending(5000);
+            await Task.Delay(100);
+
+            // Assert
+            sender.StopSending();
+            _mockLogger!.Verify(l => l.Log(It.IsAny<string>()), Times.AtLeastOnce);
+        }
+
+        [Test]
+        public async Task StartSending_ShouldSendMessagesWithIncrementingCounter()
+        {
+            // Arrange
+            using var sender = new UdpTimedSender("127.0.0.1", 60001, _mockLogger!.Object);
+
+            // Act
+            sender.StartSending(100);
+            await Task.Delay(350); // Wait for ~3 sends
+            sender.StopSending();
+
+            // Assert
+            _mockLogger!.Verify(
+                l => l.Log(It.Is<string>(s => s.Contains("Message sent to 127.0.0.1:60001"))),
+                Times.AtLeast(2));
+        }
+
+        [Test]
+        public async Task StopSending_ShouldStopTimer()
+        {
+            // Arrange
+            using var sender = new UdpTimedSender("127.0.0.1", 60002, _mockLogger!.Object);
+            sender.StartSending(100);
+
+            // Act
+            sender.StopSending();
+            await Task.Delay(300);
+
+            // Assert - no new messages after stop
+            _mockLogger!.Invocations.Clear();
+            await Task.Delay(200);
+            _mockLogger.Verify(l => l.Log(It.IsAny<string>()), Times.Never);
+        }
+
+        [Test]
+        public void Constructor_ShouldInitializeWithValidParameters()
+        {
+            // Arrange & Act
+            Action act = () =>
+            {
+                using var sender = new UdpTimedSender("192.168.1.1", 8080, _mockLogger!.Object);
+            };
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        [Test]
+        public void Dispose_MultipleCalls_ShouldNotThrow()
+        {
+            // Arrange
+            var sender = new UdpTimedSender("127.0.0.1", 5000, _mockLogger!.Object);
+
+            // Act & Assert
+            sender.Dispose();
+            Action act = () => sender.Dispose();
             act.Should().NotThrow();
         }
     }

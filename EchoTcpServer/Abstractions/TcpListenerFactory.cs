@@ -1,11 +1,10 @@
 using System.Net;
-using EchoServerAbstractions;
 
-namespace EchoServerImplementations
+namespace EchoServer.Abstractions
 {
     public class TcpListenerFactory : ITcpListenerFactory
     {
-        public ITcpListenerWrapper Create(IPAddress address, int port) //
+        public ITcpListenerWrapper Create(IPAddress address, int port)
         {
             return new TcpListenerWrapper(address, port);
         }

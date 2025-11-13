@@ -1,11 +1,12 @@
+using System;
 using System.Threading.Tasks;
 
-namespace EchoServerAbstractions
+namespace EchoServer.Abstractions
 {
-    public interface ITcpListenerWrapper
+    public interface ITcpListenerWrapper : IDisposable
     {
-        void Start(); //
-        void Stop(); //
-        Task<ITcpClientWrapper> AcceptTcpClientAsync(); // Повертає ITcpClientWrapper
+        void Start();
+        void Stop();
+        Task<ITcpClientWrapper> AcceptTcpClientAsync();
     }
 }
