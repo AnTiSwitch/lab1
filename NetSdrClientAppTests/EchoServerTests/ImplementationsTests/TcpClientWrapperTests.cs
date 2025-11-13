@@ -17,8 +17,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             var realClient = new TcpClient();
             var wrapper = new TcpClientWrapper(realClient);
             INetworkStreamWrapper streamWrapper = wrapper.GetStream();
-            Assert.IsNotNull(streamWrapper);
-            Assert.IsInstanceOf<NetworkStreamWrapper>(streamWrapper);
+
+            IsNotNull(streamWrapper);
+            IsInstanceOf<NetworkStreamWrapper>(streamWrapper);
             wrapper.Dispose();
         }
 
@@ -28,7 +29,6 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
             using (var listener = new TcpListener(IPAddress.Loopback, 5002))
             {
                 listener.Start();
-                // Для коректного створення реального клієнта (закриваємо listener після Accept)
                 var connectTask = Task.Run(() => new TcpClient("127.0.0.1", 5002));
                 var realClient = listener.AcceptTcpClient();
                 listener.Stop();
@@ -37,8 +37,7 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
                 wrapper.Close();
 
-                // Перевіряємо, що внутрішній клієнт закритий (хоча б через Connected)
-                Assert.IsFalse(realClient.Connected, "Internal client should be closed after wrapper.Close()");
+                IsFalse(realClient.Connected, "Internal client should be closed after wrapper.Close()");
 
                 wrapper.Dispose();
             }

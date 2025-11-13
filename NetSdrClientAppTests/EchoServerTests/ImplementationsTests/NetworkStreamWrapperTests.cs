@@ -35,8 +35,8 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
                 var buffer = new byte[5];
                 int bytesRead = await wrapper.ReadAsync(buffer, 0, buffer.Length, CancellationToken.None);
 
-                Assert.AreEqual(3, bytesRead);
-                Assert.AreEqual(1, buffer[0]);
+                AreEqual(3, bytesRead);
+                AreEqual(1, buffer[0]);
             }
         }
 
@@ -50,9 +50,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 
                 await wrapper.WriteAsync(testData, 0, testData.Length, CancellationToken.None);
 
-                Assert.AreEqual(2, memoryStream.Length);
+                AreEqual(2, memoryStream.Length);
                 memoryStream.Position = 0;
-                Assert.AreEqual(4, memoryStream.ReadByte());
+                AreEqual(4, memoryStream.ReadByte());
             }
         }
     }

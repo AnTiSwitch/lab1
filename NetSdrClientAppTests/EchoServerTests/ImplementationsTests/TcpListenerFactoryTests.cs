@@ -13,9 +13,9 @@ namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
         public void Create_ReturnsTcpListenerWrapperInstance()
         {
             var factory = new TcpListenerFactory();
-            ITcpListenerWrapper listener = factory.Create(IPAddress.Loopback, 5000);
-            Assert.IsNotNull(listener);
-            Assert.IsInstanceOf<TcpListenerWrapper>(listener);
+            var listener = factory.Create(IPAddress.Loopback, 5000);
+            IsNotNull(listener);
+            IsInstanceOf<TcpListenerWrapper>(listener);
         }
     }
 }

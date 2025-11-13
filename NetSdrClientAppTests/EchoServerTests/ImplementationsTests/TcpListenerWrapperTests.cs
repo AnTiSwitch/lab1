@@ -8,52 +8,53 @@ using static NUnit.Framework.Assert;
 
 namespace NetSdrClientAppTests.EchoServerTests.ImplementationsTests
 {
-	[TestFixture]
-	public class TcpListenerWrapperTests
-	{
-		[Test]
-		public void Constructor_CreatesInternalTcpListener()
-		{
-			var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-			var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-			Assert.IsNotNull(listenerField.GetValue(wrapper));
-			wrapper.Dispose();
-		}
+    [TestFixture]
+    public class TcpListenerWrapperTests
+    {
+        [Test]
+        public void Constructor_CreatesInternalTcpListener()
+        {
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+            var listenerField = wrapper.GetType().GetField("_listener", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-		[Test]
-		public void Dispose_CallsStopOnInternalListener()
-		{
-			var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-			wrapper.Start();
-			wrapper.Dispose();
+            IsNotNull(listenerField.GetValue(wrapper));
+            wrapper.Dispose();
+        }
 
-			Assert.DoesNotThrow(() =>
-			{
-				var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
-				newWrapper.Dispose();
-			});
-		}
+        [Test]
+        public void Dispose_CallsStopOnInternalListener()
+        {
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+            wrapper.Start();
+            wrapper.Dispose();
 
-		[Test]
-		public async Task AcceptTcpClientAsync_WhenClientConnects_ReturnsTcpClientWrapper()
-		{
-			const int testPort = 5001;
-			var wrapper = new TcpListenerWrapper(IPAddress.Loopback, testPort);
-			wrapper.Start();
+            DoesNotThrow(() =>
+            {
+                var newWrapper = new TcpListenerWrapper(IPAddress.Loopback, 5000);
+                newWrapper.Dispose();
+            });
+        }
 
-			var acceptTask = wrapper.AcceptTcpClientAsync();
-			using (var client = new TcpClient())
-			{
-				await client.ConnectAsync(IPAddress.Loopback, testPort);
-			}
+        [Test]
+        public async Task AcceptTcpClientAsync_WhenClientConnects_ReturnsTcpClientWrapper()
+        {
+            const int testPort = 5001;
+            var wrapper = new TcpListenerWrapper(IPAddress.Loopback, testPort);
+            wrapper.Start();
 
-			ITcpClientWrapper result = await acceptTask;
+            var acceptTask = wrapper.AcceptTcpClientAsync();
+            using (var client = new TcpClient())
+            {
+                await client.ConnectAsync(IPAddress.Loopback, testPort);
+            }
 
-			Assert.IsNotNull(result);
-			Assert.IsInstanceOf<TcpClientWrapper>(result);
+            ITcpClientWrapper result = await acceptTask;
 
-			wrapper.Dispose();
-			result.Dispose();
-		}
-	}
+            IsNotNull(result);
+            IsInstanceOf<TcpClientWrapper>(result);
+
+            wrapper.Dispose();
+            result.Dispose();
+        }
+    }
 }
