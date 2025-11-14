@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 
 namespace EchoServer.Abstractions
 {
+    // �������� ��� NetworkStream
     public interface INetworkStreamWrapper : IDisposable
     {
         Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token);

@@ -1,42 +1,56 @@
 ﻿using System;
+using System.Net;
 using System.Threading.Tasks;
 using EchoServer.Abstractions;
-using EchoServer.Services;
+using EchoServer.Implementations;
 
 namespace EchoServer
 {
-    public static class Program
+    static class Program
     {
-        public static async Task Main(string[] args)
+        static async Task Main(string[] args)
         {
-            ConsoleLogger logger = new ConsoleLogger();
-            ITcpListenerFactory listenerFactory = new TcpListenerFactory();
+            // === Composition Root: Створення об'єктів та впровадження залежностей ===
 
-            EchoServerService server = new EchoServerService(5000, logger, listenerFactory);
+            // 1. Створення залежностей
+            // Використовуємо конкретні реалізації (Impl)
+            ILogger logger = new ConsoleLogger();
+            ITcpListenerFactory factory = new TcpListenerFactory();
 
-            _ = Task.Run(async () => await server.StartAsync());
+            // Порти за замовчуванням
+            const int tcpPort = 5000;
+            const int udpPort = 60000;
 
-            string host = "127.0.0.1";
-            int port = 60000;
-            int intervalMilliseconds = 5000;
+            // 2. Створення сервісів, передаючи залежності (DI)
+            EchoServerService server = new EchoServerService(tcpPort, logger, factory);
+            UdpTimedSender sender = new UdpTimedSender("127.0.0.1", udpPort, logger);
 
-            using (var sender = new UdpTimedSender(host, port, logger))
+            // 3. Запуск сервісів
+            // TCP server запускаємо у фоновому завданні
+            Task serverTask = Task.Run(() => server.StartAsync());
+
+            // UDP sender запускаємо з інтервалом 5000 мс (5 сек)
+            sender.StartSending(5000);
+
+            // 4. Очікування команди на завершення
+            Console.WriteLine("Server is running. Press 'q' to quit.");
+
+            // Блокуємо головний потік до натискання 'q'
+            while (Console.ReadKey(true).Key != ConsoleKey.Q)
             {
-                logger.Log("Press any key to stop sending...");
-                sender.StartSending(intervalMilliseconds);
-
-                logger.Log("Press 'q' to quit...");
-                while (Console.ReadKey(intercept: true).Key != ConsoleKey.Q)
-                {
-                    // Wait for 'q' key
-                }
-
-                sender.StopSending();
-                server.Stop();
-                logger.Log("Sender stopped.");
+                // Запобігання блокуванню процесора
+                await Task.Delay(100);
             }
 
-            await Task.CompletedTask;
+            // 5. Коректна зупинка
+            Console.WriteLine("\nShutting down...");
+            server.Stop(); // Викликаємо скасування токена та зупинку listener
+            sender.Dispose(); // Зупиняємо таймер і закриваємо UDP клієнт
+
+            // Очікуємо завершення роботи сервера
+            await serverTask;
+
+            logger.Log("Application exited.");
         }
     }
 }
