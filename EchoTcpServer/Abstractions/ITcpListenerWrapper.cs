@@ -4,7 +4,7 @@ using EchoServer.Abstractions;
 
 namespace EchoServer.Abstractions
 {
-    // Обгортка для TcpListener
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ TcpListener
     public interface ITcpListenerWrapper : IDisposable
     {
         void Start();

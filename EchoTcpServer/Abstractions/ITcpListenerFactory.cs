@@ -3,7 +3,7 @@ using EchoServer.Abstractions;
 
 namespace EchoServer.Abstractions
 {
-    // Фабрика для створення TcpListener, дозволяє мокати listener
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ TcpListener, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ listener
     public interface ITcpListenerFactory
     {
         ITcpListenerWrapper Create(IPAddress address, int port);

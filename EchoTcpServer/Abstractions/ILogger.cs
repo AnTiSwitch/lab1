@@ -2,7 +2,7 @@ using System;
 
 namespace EchoServer.Abstractions
 {
-    // Інтерфейс для логування, абстрагує Console.WriteLine
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Console.WriteLine
     public interface ILogger
     {
         void Log(string message);

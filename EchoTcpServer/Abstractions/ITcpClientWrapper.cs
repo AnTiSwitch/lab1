@@ -3,7 +3,7 @@ using EchoServer.Abstractions;
 
 namespace EchoServer.Abstractions
 {
-    // Обгортка для TcpClient
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ TcpClient
     public interface ITcpClientWrapper : IDisposable
     {
         INetworkStreamWrapper GetStream();
