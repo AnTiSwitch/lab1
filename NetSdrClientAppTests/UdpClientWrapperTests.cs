@@ -1,13 +1,8 @@
-using System;
-using System.Linq;
-using System.Net;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
 using NetSdrClientApp.Networking;
 using NUnit.Framework;
+using System;
 
-namespace NetSdrClientApp.Tests.Networking
+namespace NetSdrClientAppTests
 {
 	public class UdpClientWrapperTests
 	{
@@ -19,7 +14,7 @@ namespace NetSdrClientApp.Tests.Networking
 
             // Act
             _testSender = new UdpClient();
-            byte[] largeData = new byte[8000]; // Великий пакет
+            byte[] largeData = new byte[8000]; // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
             for (int i = 0; i < largeData.Length; i++)
             {
                 largeData[i] = (byte)(i % 256);
@@ -29,7 +24,7 @@ namespace NetSdrClientApp.Tests.Networking
             await Task.WhenAny(messageReceived.Task, Task.Delay(3000));
 
 			// Assert
-			// (Якщо ми дійшли сюди, тест пройдено)
+			// (пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 			Assert.Pass();
 		}
 	}
