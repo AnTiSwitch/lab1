@@ -1,66 +1,109 @@
 using System;
 using System.Net.Sockets;
+using EchoServer.Abstractions;
 using Moq;
 using Xunit;
-using EchoServer.Abstractions;
 using Assert = Xunit.Assert;
+
 
 public class TcpClientServerWrapperTests
 {
     [Fact]
-    public void Constructor_InitializesClient()
+    public void Constructor_ShouldStoreClient()
     {
-        var mockTcpClient = new Mock<TcpClient>();
+        // Arrange
+        var client = new TcpClient();
 
-        var wrapper = new TcpClientWrapper(mockTcpClient.Object);
+        // Act
+        var wrapper = new TcpClientWrapper(client);
 
+        // Assert
         Assert.NotNull(wrapper);
     }
 
     [Fact]
-    public void GetStream_CallsGetStreamAndReturnsWrapper()
+    public void GetStream_ShouldReturnNetworkStreamWrapper()
     {
-        var mockNetworkStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        var mockTcpClient = new Mock<TcpClient>(MockBehavior.Strict);
+        // Arrange
+        var mockClient = new Mock<TcpClient>(MockBehavior.Strict);
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
 
-        mockTcpClient.Setup(c => c.GetStream()).Returns(mockNetworkStream.Object).Verifiable();
+        mockClient
+            .Setup(c => c.GetStream())
+            .Returns(mockStream.Object);
 
-        var wrapper = new TcpClientWrapper(mockTcpClient.Object);
+        var wrapper = new TcpClientWrapper(mockClient.Object);
 
-        var streamWrapper = wrapper.GetStream();
+        // Act
+        var result = wrapper.GetStream();
 
-        mockTcpClient.Verify(c => c.GetStream(), Times.Once);
-
-        Assert.NotNull(streamWrapper);
-        Assert.IsType<NetworkStreamWrapper>(streamWrapper);
-        Assert.IsAssignableFrom<INetworkStreamWrapper>(streamWrapper);
+        // Assert
+        Assert.IsAssignableFrom<INetworkStreamWrapper>(result);
+        Assert.IsType<NetworkStreamWrapper>(result);
+        mockClient.Verify(c => c.GetStream(), Times.Once);
     }
 
     [Fact]
-    public void Close_CallsClientClose()
+    public void Close_ShouldCallClientClose()
     {
-        var mockTcpClient = new Mock<TcpClient>(MockBehavior.Strict);
+        // Arrange
+        var mockClient = new Mock<TcpClient>(MockBehavior.Strict);
+        mockClient.Setup(c => c.Close());
 
-        mockTcpClient.Setup(c => c.Close()).Verifiable();
+        var wrapper = new TcpClientWrapper(mockClient.Object);
 
-        var wrapper = new TcpClientWrapper(mockTcpClient.Object);
-
+        // Act
         wrapper.Close();
 
-        mockTcpClient.Verify(c => c.Close(), Times.Once);
+        // Assert
+        mockClient.Verify(c => c.Close(), Times.Once);
     }
 
     [Fact]
-    public void Dispose_CallsClientDisposeAndSuppressesFinalize()
+    public void Dispose_ShouldCallClientDispose()
     {
-        var mockTcpClient = new Mock<TcpClient>(MockBehavior.Strict);
+        // Arrange
+        var mockClient = new Mock<TcpClient>(MockBehavior.Strict);
+        mockClient.Setup(c => c.Dispose());
 
-        mockTcpClient.Setup(c => c.Dispose()).Verifiable();
+        var wrapper = new TcpClientWrapper(mockClient.Object);
 
-        var wrapper = new TcpClientWrapper(mockTcpClient.Object);
-
+        // Act
         wrapper.Dispose();
 
-        mockTcpClient.Verify(c => c.Dispose(), Times.Once);
+        // Assert
+        mockClient.Verify(c => c.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public void Dispose_ShouldNotThrowIfCalledTwice()
+    {
+        // Arrange
+        var mockClient = new Mock<TcpClient>(MockBehavior.Strict);
+        mockClient.Setup(c => c.Dispose());
+
+        var wrapper = new TcpClientWrapper(mockClient.Object);
+
+        // Act
+        wrapper.Dispose();
+        wrapper.Dispose(); // second call must NOT throw
+
+        // Assert
+        mockClient.Verify(c => c.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public void GetStream_ShouldThrowIfClientThrows()
+    {
+        // Arrange
+        var mockClient = new Mock<TcpClient>(MockBehavior.Strict);
+        mockClient
+            .Setup(c => c.GetStream())
+            .Throws(new InvalidOperationException());
+
+        var wrapper = new TcpClientWrapper(mockClient.Object);
+
+        // Act + Assert
+        Assert.Throws<InvalidOperationException>(() => wrapper.GetStream());
     }
 }

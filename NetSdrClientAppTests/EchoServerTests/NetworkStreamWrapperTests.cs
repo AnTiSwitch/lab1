@@ -1,86 +1,124 @@
-using Assert = Xunit.Assert;
 using System;
-using System.IO;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using EchoServer.Abstractions;
 using Moq;
 using Xunit;
-using EchoServer.Abstractions;
+using Assert = Xunit.Assert;
 
 public class NetworkStreamWrapperTests
 {
-    private readonly CancellationToken _defaultToken = CancellationToken.None;
-
     [Fact]
-    public void Constructor_InitializesStream()
-    {
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
-
-        Assert.NotNull(wrapper);
-    }
-
-    [Fact]
-    public async Task ReadAsync_CallsUnderlyingReadAsync()
+    public async Task ReadAsync_ShouldCallUnderlyingStreamReadAsync()
     {
         // Arrange
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
         var buffer = new byte[10];
-        var expectedBytesRead = 5;
+        var token = CancellationToken.None;
 
-        // Налаштування: Очікуємо виклику ReadAsync і повертаємо очікуваний результат
+        int expectedBytes = 7;
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
         mockStream
-            .Setup(s => s.ReadAsync(buffer, 0, 10, _defaultToken))
-            .ReturnsAsync(expectedBytesRead)
-            .Verifiable();
+            .Setup(s => s.ReadAsync(buffer, 0, 10, token))
+            .ReturnsAsync(expectedBytes);
 
         var wrapper = new NetworkStreamWrapper(mockStream.Object);
 
         // Act
-        var bytesRead = await wrapper.ReadAsync(buffer, 0, 10, _defaultToken);
+        int actual = await wrapper.ReadAsync(buffer, 0, 10, token);
 
         // Assert
-        Assert.Equal(expectedBytesRead, bytesRead);
-        mockStream.Verify(s => s.ReadAsync(buffer, 0, 10, _defaultToken), Times.Once);
+        Assert.Equal(expectedBytes, actual);
+        mockStream.Verify(s => s.ReadAsync(buffer, 0, 10, token), Times.Once);
     }
 
     [Fact]
-    public async Task WriteAsync_CallsUnderlyingWriteAsync()
+    public async Task ReadAsync_ShouldThrowIfStreamThrows()
     {
         // Arrange
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
         var buffer = new byte[10];
+        var token = CancellationToken.None;
 
-        // Налаштування: Очікуємо виклику WriteAsync
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
         mockStream
-            .Setup(s => s.WriteAsync(buffer, 0, 10, _defaultToken))
-            .Returns(Task.CompletedTask)
-            .Verifiable();
+            .Setup(s => s.ReadAsync(buffer, 0, 10, token))
+            .ThrowsAsync(new InvalidOperationException());
+
+        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+
+        // Act + Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            wrapper.ReadAsync(buffer, 0, 10, token));
+    }
+
+    [Fact]
+    public async Task WriteAsync_ShouldCallUnderlyingStreamWriteAsync()
+    {
+        // Arrange
+        var buffer = new byte[10];
+        var token = CancellationToken.None;
+
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
+        mockStream
+            .Setup(s => s.WriteAsync(buffer, 0, 10, token))
+            .Returns(Task.CompletedTask);
 
         var wrapper = new NetworkStreamWrapper(mockStream.Object);
 
         // Act
-        await wrapper.WriteAsync(buffer, 0, 10, _defaultToken);
+        await wrapper.WriteAsync(buffer, 0, 10, token);
 
         // Assert
-        mockStream.Verify(s => s.WriteAsync(buffer, 0, 10, _defaultToken), Times.Once);
+        mockStream.Verify(s => s.WriteAsync(buffer, 0, 10, token), Times.Once);
     }
 
     [Fact]
-    public void Dispose_CallsUnderlyingDisposeAndSuppressesFinalize()
+    public async Task WriteAsync_ShouldThrowIfStreamThrows()
+    {
+        // Arrange
+        var buffer = new byte[10];
+        var token = CancellationToken.None;
+
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
+        mockStream
+            .Setup(s => s.WriteAsync(buffer, 0, 10, token))
+            .ThrowsAsync(new InvalidOperationException());
+
+        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+
+        // Act + Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            wrapper.WriteAsync(buffer, 0, 10, token));
+    }
+
+    [Fact]
+    public void Dispose_ShouldCallDisposeOnStream()
     {
         // Arrange
         var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-
-        // Налаштування: Очікуємо виклику Dispose
-        mockStream.Setup(s => s.Dispose()).Verifiable();
+        mockStream.Setup(s => s.Dispose());
 
         var wrapper = new NetworkStreamWrapper(mockStream.Object);
 
         // Act
         wrapper.Dispose();
+
+        // Assert
+        mockStream.Verify(s => s.Dispose(), Times.Once);
+    }
+
+    [Fact]
+    public void Dispose_ShouldNotThrowIfCalledTwice()
+    {
+        // Arrange
+        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
+        mockStream.Setup(s => s.Dispose());
+
+        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+
+        // Act
+        wrapper.Dispose();
+        wrapper.Dispose(); // second call must not throw
 
         // Assert
         mockStream.Verify(s => s.Dispose(), Times.Once);
