@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using EchoServer.Abstractions;
 using Moq;
 using Xunit;
+using Assert = Xunit.Assert;
 
 public class NetworkStreamWrapperTests
 {

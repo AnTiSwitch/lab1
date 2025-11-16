@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using EchoServer.Abstractions;
 using Moq;
 using Xunit;
+using Assert = Xunit.Assert;
+
 
 public class TcpClientServerWrapperTests
 {
