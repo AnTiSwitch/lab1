@@ -7,24 +7,25 @@ namespace NetSdrClientAppTests
 {
     public class TcpClientWrapperTests
     {
-        [Test]
+        [Test] 
         public void SendMessageAsync_Bytes_WhenNotConnected_ThrowsInvalidOperationException()
         {
             // Arrange
-            var tcpClient = new TcpClientWrapper("127.0.0.1", 8080);
-            var testData = new byte[] { 1, 2, 3 };
+            var wrapper = new TcpClientWrapper("localhost", _testPort);
+            byte[] testData = new byte[] { 0x01, 0x02, 0x03 };
 
             // Act & Assert
+            // (�� ��������� NUnit ��� �������� ����������� �������)
             Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await tcpClient.SendMessageAsync(testData));
         }
 
-        [Test]
+        [Test] 
         public void SendMessageAsync_String_WhenNotConnected_ThrowsInvalidOperationException()
         {
             // Arrange
-            var tcpClient = new TcpClientWrapper("127.0.0.1", 8080);
-            var testString = "hello";
+            var wrapper = new TcpClientWrapper("localhost", _testPort);
+            string testString = "Test";
 
             // Act & Assert
             Assert.ThrowsAsync<InvalidOperationException>(async () =>
