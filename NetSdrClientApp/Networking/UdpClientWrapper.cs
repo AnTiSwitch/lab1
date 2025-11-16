@@ -72,7 +72,7 @@ public class UdpClientWrapper : IUdpClient
         }
     }
 
-    // ✅ Виправлено: порівнюємо тільки порти, бо IPAddress.Any може бути різними інстансами
+   
     public override bool Equals(object? obj)
     {
         if (obj == null || GetType() != obj.GetType())

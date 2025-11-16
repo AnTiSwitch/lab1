@@ -1,5 +1,3 @@
-
-using Castle.Core.Logging;
 using EchoServer.Abstractions;
 using FluentAssertions;
 using NetSdrClientApp.Networking;
@@ -7,6 +5,7 @@ using NUnit.Framework;
 using System;
 using System.Net;
 using System.Net.Sockets;
+using ClientWrapper = EchoServer.Abstractions.TcpClientWrapper;
 
 namespace NetSdrClientAppTests
 {
@@ -72,7 +71,8 @@ namespace NetSdrClientAppTests
         public void TcpClientWrapper_ShouldImplementInterface()
         {
             // Arrange & Act
-            var wrapperType = typeof(TcpClientWrapper);
+            // ВИПРАВЛЕНО: Використовуємо аліас 'ClientWrapper'
+            var wrapperType = typeof(ClientWrapper);
 
             // Assert
             wrapperType.Should().Implement<ITcpClientWrapper>();

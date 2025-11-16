@@ -1,5 +1,6 @@
 using System;
-using NUnit.Framework; 
+using NUnit.Framework;
+using NetSdrClientApp.Networking;
 
 namespace NetSdrClientAppTests
 {
