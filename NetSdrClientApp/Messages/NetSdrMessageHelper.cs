@@ -7,14 +7,13 @@ using System.Threading.Tasks;
 
 namespace NetSdrClientApp.Messages
 {
-    //TODO: analyze possible use of [StructLayout] for better performance and readability 
     public static class NetSdrMessageHelper
     {
         private const short _maxMessageLength = 8191;
         private const short _maxDataItemMessageLength = 8194;
-        private const short _msgHeaderLength = 2; //2 byte, 16 bit
-        private const short _msgControlItemLength = 2; //2 byte, 16 bit
-        private const short _msgSequenceNumberLength = 2; //2 byte, 16 bit
+        private const short _msgHeaderLength = 2;
+        private const short _msgControlItemLength = 2;
+        private const short _msgSequenceNumberLength = 2;
 
         public enum MsgTypes
         {
@@ -77,13 +76,13 @@ namespace NetSdrClientApp.Messages
             msgEnumarable = msgEnumarable.Skip(_msgHeaderLength);
             msgLength -= _msgHeaderLength;
 
-            if (type < MsgTypes.DataItem0) // get item code
+            if (type < MsgTypes.DataItem0)
             {
                 var value = BitConverter.ToUInt16(msgEnumarable.Take(_msgControlItemLength).ToArray());
                 msgEnumarable = msgEnumarable.Skip(_msgControlItemLength);
                 msgLength -= _msgControlItemLength;
 
-                if (Enum.IsDefined(typeof(ControlItemCodes), value))
+                if (Enum.IsDefined(typeof(ControlItemCodes), (int)value))
                 {
                     itemCode = (ControlItemCodes)value;
                 }
@@ -92,11 +91,11 @@ namespace NetSdrClientApp.Messages
                     success = false;
                 }
             }
-            else // get sequenceNumber
+            else
             {
                 sequenceNumber = BitConverter.ToUInt16(msgEnumarable.Take(_msgSequenceNumberLength).ToArray());
                 msgEnumarable = msgEnumarable.Skip(_msgSequenceNumberLength);
-                msgLength -= _msgSequenceNumberLength;
+                // ВИДАЛЕНО: msgLength -= _msgSequenceNumberLength; - Виправлено логічну помилку для DataItem
             }
 
             body = msgEnumarable.ToArray();
@@ -108,15 +107,15 @@ namespace NetSdrClientApp.Messages
 
         public static IEnumerable<int> GetSamples(ushort sampleSize, byte[] body)
         {
-            sampleSize /= 8; //to bytes
-            if (sampleSize  > 4)
+            sampleSize /= 8;
+            if (sampleSize > 4)
             {
                 throw new ArgumentOutOfRangeException();
             }
 
             var bodyEnumerable = body as IEnumerable<byte>;
             var prefixBytes = Enumerable.Range(0, 4 - sampleSize)
-                                      .Select(b => (byte)0);
+                                     .Select(b => (byte)0);
 
             while (bodyEnumerable.Count() >= sampleSize)
             {
@@ -132,7 +131,6 @@ namespace NetSdrClientApp.Messages
         {
             int lengthWithHeader = msgLength + 2;
 
-            //Data Items edge case
             if (type >= MsgTypes.DataItem0 && lengthWithHeader == _maxDataItemMessageLength)
             {
                 lengthWithHeader = 0;
