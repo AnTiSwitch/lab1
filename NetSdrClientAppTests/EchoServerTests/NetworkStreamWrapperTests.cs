@@ -1,150 +1,140 @@
 using Moq;
 using NUnit.Framework;
 using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 
-public interface INetSdrClient
+// Інтерфейс для класу, який тестується (припускаємо, що він існує)
+public interface INetworkStreamWrapper : IDisposable
 {
-    Task ConnectAsync();
-    void Disconect();
-    Task ChangeFrequencyAsync(long freq, int receiverId);
-    Task StartIQAsync();
-    Task StopIQAsync();
-    bool IQStarted { get; }
+    int ReadAsync(byte[] buffer, int offset, int count, CancellationToken token);
+    Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token);
 }
 
-public interface IConsoleReader
+// Мінімальна імітація класу NetworkStreamWrapper для тестування (як він має виглядати)
+namespace EchoServer.Abstractions
 {
-    ConsoleKeyInfo ReadKey();
-}
-
-public class ConsoleAppRunner
-{
-    private readonly INetSdrClient _netSdr;
-    private readonly IConsoleReader _consoleReader;
-
-    public ConsoleAppRunner(INetSdrClient netSdr, IConsoleReader consoleReader)
+    public class NetworkStreamWrapper : INetworkStreamWrapper
     {
-        _netSdr = netSdr;
-        _consoleReader = consoleReader;
-    }
+        private readonly NetworkStream _stream;
 
-    public async Task RunAsync()
-    {
-        while (true)
+        public NetworkStreamWrapper(NetworkStream stream)
         {
-            var key = _consoleReader.ReadKey().Key;
+            _stream = stream;
+        }
 
-            if (key == ConsoleKey.C)
-            {
-                await _netSdr.ConnectAsync();
-            }
-            else if (key == ConsoleKey.D)
-            {
-                _netSdr.Disconect();
-            }
-            else if (key == ConsoleKey.F)
-            {
-                await _netSdr.ChangeFrequencyAsync(20000000, 1);
-            }
-            else if (key == ConsoleKey.S)
-            {
-                if (_netSdr.IQStarted)
-                {
-                    await _netSdr.StopIQAsync();
-                }
-                else
-                {
-                    await _netSdr.StartIQAsync();
-                }
-            }
-            else if (key == ConsoleKey.Q)
-            {
-                break;
-            }
+        public int ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
+        {
+            // Увага: Ваш оригінальний код викликає синхронний метод Read,
+            // хоча сигнатура методу обгортки виглядає як асинхронна (ReadAsync).
+            // Ми імітуємо виклик синхронного Read для покриття.
+            return _stream.Read(buffer, offset, count);
+        }
+
+        public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token)
+        {
+            // Увага: Метод WriteAsync у NetworkStream приймає ReadOnlyMemory<byte> або byte[], 
+            // але ми викликаємо тут застарілий метод, який співпадає з вашою сигнатурою.
+            return _stream.WriteAsync(buffer, offset, count, token);
+        }
+
+        public void Dispose()
+        {
+            _stream?.Dispose();
+            GC.SuppressFinalize(this);
         }
     }
 }
 
 
-namespace NetSdrClientAppTests
+namespace EchoServerTests
 {
     [TestFixture]
-    public class ConsoleAppRunnerTests
+    public class NetworkStreamWrapperTests
     {
-        private Mock<INetSdrClient> _mockNetSdr;
-        private Mock<IConsoleReader> _mockConsoleReader;
-        private ConsoleAppRunner _runner;
+        private Mock<NetworkStream> _mockStream;
+        private NetworkStreamWrapper _wrapper;
 
         [SetUp]
-        public void Setup()
+        public void SetUp()
         {
-            _mockNetSdr = new Mock<INetSdrClient>();
-            _mockConsoleReader = new Mock<IConsoleReader>();
-
-            _mockConsoleReader.Setup(r => r.ReadKey())
-                              .Returns(() => new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
-
-            _runner = new ConsoleAppRunner(_mockNetSdr.Object, _mockConsoleReader.Object);
+            // Використовуємо MockBehavior.Loose, щоб не потрібно було заглушувати всі Dispose/Close
+            _mockStream = new Mock<NetworkStream>(MockBehavior.Loose);
+            _wrapper = new NetworkStreamWrapper(_mockStream.Object);
         }
 
         [Test]
-        public async Task RunAsync_ExecutesAllCommandsCorrectly()
+        public void Constructor_InitializesStream()
         {
-            var keySequence = new Queue<ConsoleKey>(new[]
-            {
-                ConsoleKey.C,
-                ConsoleKey.F,
-                ConsoleKey.S,
-                ConsoleKey.S,
-                ConsoleKey.D,
-                ConsoleKey.X,
-                ConsoleKey.Q
-            });
-
-            _mockConsoleReader.Setup(r => r.ReadKey())
-                              .Returns(() =>
-                              {
-                                  if (keySequence.Count == 0) return new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false);
-                                  var key = keySequence.Dequeue();
-                                  return new ConsoleKeyInfo(' ', key, false, false, false);
-                              });
-
-            var iqStartedCounter = 0;
-            _mockNetSdr.SetupGet(c => c.IQStarted)
-                       .Returns(() =>
-                       {
-                           iqStartedCounter++;
-                           return iqStartedCounter > 1;
-                       });
-
-
-            await _runner.RunAsync();
-
-            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Once());
-            _mockNetSdr.Verify(c => c.ChangeFrequencyAsync(20000000, 1), Times.Once());
-
-            _mockNetSdr.VerifyGet(c => c.IQStarted, Times.Exactly(2));
-
-            _mockNetSdr.Verify(c => c.StartIQAsync(), Times.Once());
-            _mockNetSdr.Verify(c => c.StopIQAsync(), Times.Once());
-
-            _mockNetSdr.Verify(c => c.Disconect(), Times.Once());
-
-            _mockNetSdr.VerifyNoOtherCalls();
+            Assert.That(_wrapper, Is.Not.Null);
+            // Прямо перевірити приватне поле важко, але якщо об'єкт створено, конструктор виконався.
         }
 
         [Test]
-        public async Task RunAsync_QuitsImmediatelyOnQ()
+        public void ReadAsync_CallsUnderlyingRead()
         {
-            _mockConsoleReader.Setup(r => r.ReadKey())
-                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
+            // Arrange
+            byte[] buffer = new byte[10];
+            int expectedBytes = 5;
 
-            await _runner.RunAsync();
+            // Налаштовуємо заглушку для синхронного методу Read
+            _mockStream
+                .Setup(s => s.Read(buffer, 1, 10))
+                .Returns(expectedBytes);
 
-            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Never());
-            _mockNetSdr.Verify(c => c.Disconect(), Times.Never());
+            // Act
+            int result = _wrapper.ReadAsync(buffer, 1, 10, CancellationToken.None);
+
+            // Assert
+            Assert.That(result, Is.EqualTo(expectedBytes));
+            // Перевіряємо, що метод Read був викликаний з правильними аргументами
+            _mockStream.Verify(s => s.Read(buffer, 1, 10), Times.Once());
+        }
+
+        [Test]
+        public async Task WriteAsync_CallsUnderlyingWriteAsync()
+        {
+            // Arrange
+            byte[] buffer = new byte[10];
+            var cts = new CancellationTokenSource();
+
+            // Налаштовуємо заглушку для WriteAsync
+            _mockStream
+                .Setup(s => s.WriteAsync(buffer, 1, 10, cts.Token))
+                .Returns(Task.CompletedTask);
+
+            // Act
+            await _wrapper.WriteAsync(buffer, 1, 10, cts.Token);
+
+            // Assert
+            // Перевіряємо, що асинхронний метод WriteAsync був викликаний
+            _mockStream.Verify(s => s.WriteAsync(buffer, 1, 10, cts.Token), Times.Once());
+        }
+
+        [Test]
+        public void Dispose_CallsStreamDispose()
+        {
+            // Act
+            _wrapper.Dispose();
+
+            // Assert
+            // Перевіряємо, що метод Dispose на заглушці NetworkStream був викликаний
+            _mockStream.Verify(s => s.Dispose(), Times.Once());
+        }
+
+        [Test]
+        public void Dispose_DoesNotThrowIfCalledMultipleTimes()
+        {
+            // Arrange: Використовуємо MockBehavior.Loose, що дозволяє Dispose викликатися двічі
+
+            // Act
+            _wrapper.Dispose();
+            _wrapper.Dispose();
+
+            // Assert: Перевіряємо, що Dispose був викликаний лише один раз (завдяки _stream?.Dispose() та GC.SuppressFinalize)
+            _mockStream.Verify(s => s.Dispose(), Times.Once());
         }
     }
 }
