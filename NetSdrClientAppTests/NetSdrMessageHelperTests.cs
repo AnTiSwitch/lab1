@@ -10,6 +10,8 @@ namespace NetSdrClientAppTests
         private const short _maxMessageLength = 8191;
         private const short _maxDataItemMessageLength = 8194;
         private const short _msgHeaderLength = 2;
+        private const short _msgControlItemLength = 2;
+        private const short _msgSequenceNumberLength = 2;
 
         [SetUp]
         public void Setup()
@@ -79,7 +81,7 @@ namespace NetSdrClientAppTests
         {
             var type = NetSdrMessageHelper.MsgTypes.Ack;
             var code = NetSdrMessageHelper.ControlItemCodes.ReceiverFrequency;
-            int parametersLength = _maxMessageLength - _msgHeaderLength - 2;
+            int parametersLength = _maxMessageLength - _msgHeaderLength - _msgControlItemLength;
 
             byte[] msg = NetSdrMessageHelper.GetControlItemMessage(type, code, new byte[parametersLength]);
 
@@ -91,7 +93,7 @@ namespace NetSdrClientAppTests
         {
             var type = NetSdrMessageHelper.MsgTypes.Ack;
             var code = NetSdrMessageHelper.ControlItemCodes.ReceiverFrequency;
-            int invalidParametersLength = _maxMessageLength - _msgHeaderLength - 2 + 1;
+            int invalidParametersLength = _maxMessageLength - _msgHeaderLength - _msgControlItemLength + 1;
 
             Assert.Throws<ArgumentException>(() =>
             {
@@ -110,9 +112,11 @@ namespace NetSdrClientAppTests
             Assert.That(msg.Length, Is.EqualTo(_maxDataItemMessageLength));
 
             var num = BitConverter.ToUInt16(msg.Take(2).ToArray());
-            var lengthFromHeader = num - ((int)type << 13);
+            var actualType = (NetSdrMessageHelper.MsgTypes)(num >> 13);
+            var lengthFromHeader = num - ((int)actualType << 13);
 
-            Assert.That(lengthFromHeader, Is.EqualTo(0), "Header length should be 0 for max DataItem length");
+            Assert.That(lengthFromHeader, Is.EqualTo(0));
+            Assert.That(actualType, Is.EqualTo(type));
         }
 
         [Test]
@@ -154,7 +158,8 @@ namespace NetSdrClientAppTests
             Assert.IsFalse(success);
             Assert.That(actualType, Is.EqualTo(expectedType));
             Assert.That(actualItemCode, Is.EqualTo(NetSdrMessageHelper.ControlItemCodes.None));
-            Assert.That(actualBody.Length, Is.EqualTo(validBody.Length + 2));
+            // Виправлення: Код ItemCode пропускається, тому тіло складається лише з validBody.
+            Assert.That(actualBody.Length, Is.EqualTo(validBody.Length));
         }
 
         [Test]
@@ -164,7 +169,7 @@ namespace NetSdrClientAppTests
             ushort expectedSequenceNumber = 12345;
             byte[] expectedBody = { 0xAA, 0xBB, 0xCC };
 
-            int totalPayloadLength = 5;
+            int totalPayloadLength = expectedBody.Length + _msgSequenceNumberLength;
 
             ushort headerValue = (ushort)(totalPayloadLength + ((int)expectedType << 13));
             byte[] headerBytes = BitConverter.GetBytes(headerValue);
@@ -185,10 +190,9 @@ namespace NetSdrClientAppTests
             Assert.IsTrue(success);
 
             Assert.That(actualType, Is.EqualTo(expectedType));
-            Assert.That(actualBody, Is.EqualTo(expectedBody));
-
             Assert.That(itemCode, Is.EqualTo(NetSdrMessageHelper.ControlItemCodes.None));
             Assert.That(actualSequenceNumber, Is.EqualTo(expectedSequenceNumber));
+            Assert.That(actualBody, Is.EqualTo(expectedBody));
         }
 
         [Test]
@@ -229,7 +233,6 @@ namespace NetSdrClientAppTests
             var samples = NetSdrMessageHelper.GetSamples(sampleSizeBits, body).ToList();
 
             int expectedSampleCount = body.Length / sampleSizeBytes;
-
             Assert.That(samples.Count, Is.EqualTo(expectedSampleCount));
 
             byte[] actualBytes = BitConverter.GetBytes(samples.First());
