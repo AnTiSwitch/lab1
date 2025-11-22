@@ -12,6 +12,20 @@ using NUnit.Framework;
 
 namespace NetSdrClientApp.Tests.Networking
 {
+    // Додаємо клас-нащадок для тестування приватного методу StartListeningAsync
+    public class TestableTcpClientWrapper : TcpClientWrapper
+    {
+        public TestableTcpClientWrapper(string host, int port) : base(host, port) { }
+
+        public Task CallStartListeningAsync()
+        {
+            return base.StartListeningAsync();
+        }
+
+        public bool IsConnected => base.Connected;
+    }
+
+
     [TestFixture]
     public class TcpClientWrapperTests
     {
@@ -389,6 +403,42 @@ namespace NetSdrClientApp.Tests.Networking
             wrapper.Disconnect();
 
             wrapper.Disconnect();
+        }
+
+        // Покриває if (!Connected) у StartListeningAsync
+        [Test]
+        public void StartListeningAsync_ThrowsException_IfNotConnected()
+        {
+            var wrapper = new TestableTcpClientWrapper("localhost", _testPort);
+
+            Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            {
+                await wrapper.CallStartListeningAsync();
+            });
+        }
+
+        // Покриває else if (bytesRead == 0)
+        [Test]
+        public async Task Listening_HandlesServerDisconnect_BytesReadZero()
+        {
+            Assert.That(_testServer, Is.Not.Null);
+            _testServer.Start();
+            var wrapper = new TcpClientWrapper("localhost", _testPort);
+
+            wrapper.Connect();
+            await Task.Delay(100);
+
+            var serverTask = Task.Run(async () =>
+            {
+                var client = await _testServer!.AcceptTcpClientAsync();
+                await Task.Delay(200);
+                client.Close();
+            });
+
+            await Task.WhenAny(serverTask, Task.Delay(1000));
+
+            Assert.That(wrapper.Connected, Is.False);
+            await serverTask;
         }
     }
 }
