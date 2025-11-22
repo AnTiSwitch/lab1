@@ -126,6 +126,8 @@ namespace NetSdrClientAppTests
             _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Once());
             _mockNetSdr.Verify(c => c.ChangeFrequencyAsync(20000000, 1), Times.Once());
 
+            _mockNetSdr.VerifyGet(c => c.IQStarted, Times.Exactly(2));
+
             _mockNetSdr.Verify(c => c.StartIQAsync(), Times.Once());
             _mockNetSdr.Verify(c => c.StopIQAsync(), Times.Once());
 
