@@ -394,6 +394,7 @@ namespace NetSdrClientApp.Tests.Networking
             Assert.That(wrapper.Connected, Is.False);
         }
 
+        // Виправлено попередження S2699
         [Test]
         public void CleanupResources_HandlesObjectDisposedException_ForCts()
         {
@@ -403,6 +404,8 @@ namespace NetSdrClientApp.Tests.Networking
             wrapper.Disconnect();
 
             wrapper.Disconnect();
+
+            Assert.That(wrapper.Connected, Is.False);
         }
 
         // Покриває if (!Connected) у StartListeningAsync

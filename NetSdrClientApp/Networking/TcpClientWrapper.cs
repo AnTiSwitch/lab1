@@ -130,7 +130,7 @@ namespace NetSdrClientApp.Networking
             _stream = null;
         }
 
-        private async Task StartListeningAsync()
+        protected async Task StartListeningAsync()
         {
             if (!Connected)
             {
