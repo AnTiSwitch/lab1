@@ -1,126 +1,150 @@
-using System;
-using System.Net.Sockets;
-using System.Threading;
-using System.Threading.Tasks;
-using EchoServer.Abstractions;
 using Moq;
-using Xunit;
-using Assert = Xunit.Assert;
+using NUnit.Framework;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
-public class NetworkStreamWrapperTests
+public interface INetSdrClient
 {
-    [Fact]
-    public async Task ReadAsync_ShouldCallUnderlyingStreamReadAsync()
+    Task ConnectAsync();
+    void Disconect();
+    Task ChangeFrequencyAsync(long freq, int receiverId);
+    Task StartIQAsync();
+    Task StopIQAsync();
+    bool IQStarted { get; }
+}
+
+public interface IConsoleReader
+{
+    ConsoleKeyInfo ReadKey();
+}
+
+public class ConsoleAppRunner
+{
+    private readonly INetSdrClient _netSdr;
+    private readonly IConsoleReader _consoleReader;
+
+    public ConsoleAppRunner(INetSdrClient netSdr, IConsoleReader consoleReader)
     {
-        // Arrange
-        var buffer = new byte[10];
-        var token = CancellationToken.None;
-
-        int expectedBytes = 7;
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream
-            .Setup(s => s.ReadAsync(buffer, 0, 10, token))
-            .ReturnsAsync(expectedBytes);
-
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
-
-        // Act
-        int actual = await wrapper.ReadAsync(buffer, 0, 10, token);
-
-        // Assert
-        Assert.Equal(expectedBytes, actual);
-        mockStream.Verify(s => s.ReadAsync(buffer, 0, 10, token), Times.Once);
+        _netSdr = netSdr;
+        _consoleReader = consoleReader;
     }
 
-    [Fact]
-    public async Task ReadAsync_ShouldThrowIfStreamThrows()
+    public async Task RunAsync()
     {
-        // Arrange
-        var buffer = new byte[10];
-        var token = CancellationToken.None;
+        while (true)
+        {
+            var key = _consoleReader.ReadKey().Key;
 
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream
-            .Setup(s => s.ReadAsync(buffer, 0, 10, token))
-            .ThrowsAsync(new InvalidOperationException());
-
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
-
-        // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            wrapper.ReadAsync(buffer, 0, 10, token));
+            if (key == ConsoleKey.C)
+            {
+                await _netSdr.ConnectAsync();
+            }
+            else if (key == ConsoleKey.D)
+            {
+                _netSdr.Disconect();
+            }
+            else if (key == ConsoleKey.F)
+            {
+                await _netSdr.ChangeFrequencyAsync(20000000, 1);
+            }
+            else if (key == ConsoleKey.S)
+            {
+                if (_netSdr.IQStarted)
+                {
+                    await _netSdr.StopIQAsync();
+                }
+                else
+                {
+                    await _netSdr.StartIQAsync();
+                }
+            }
+            else if (key == ConsoleKey.Q)
+            {
+                break;
+            }
+        }
     }
+}
 
-    [Fact]
-    public async Task WriteAsync_ShouldCallUnderlyingStreamWriteAsync()
+
+namespace NetSdrClientAppTests
+{
+    [TestFixture]
+    public class ConsoleAppRunnerTests
     {
-        // Arrange
-        var buffer = new byte[10];
-        var token = CancellationToken.None;
+        private Mock<INetSdrClient> _mockNetSdr;
+        private Mock<IConsoleReader> _mockConsoleReader;
+        private ConsoleAppRunner _runner;
 
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream
-            .Setup(s => s.WriteAsync(buffer, 0, 10, token))
-            .Returns(Task.CompletedTask);
+        [SetUp]
+        public void Setup()
+        {
+            _mockNetSdr = new Mock<INetSdrClient>();
+            _mockConsoleReader = new Mock<IConsoleReader>();
 
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+            _mockConsoleReader.Setup(r => r.ReadKey())
+                              .Returns(() => new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
 
-        // Act
-        await wrapper.WriteAsync(buffer, 0, 10, token);
+            _runner = new ConsoleAppRunner(_mockNetSdr.Object, _mockConsoleReader.Object);
+        }
 
-        // Assert
-        mockStream.Verify(s => s.WriteAsync(buffer, 0, 10, token), Times.Once);
-    }
+        [Test]
+        public async Task RunAsync_ExecutesAllCommandsCorrectly()
+        {
+            var keySequence = new Queue<ConsoleKey>(new[]
+            {
+                ConsoleKey.C,
+                ConsoleKey.F,
+                ConsoleKey.S,
+                ConsoleKey.S,
+                ConsoleKey.D,
+                ConsoleKey.X,
+                ConsoleKey.Q
+            });
 
-    [Fact]
-    public async Task WriteAsync_ShouldThrowIfStreamThrows()
-    {
-        // Arrange
-        var buffer = new byte[10];
-        var token = CancellationToken.None;
+            _mockConsoleReader.Setup(r => r.ReadKey())
+                              .Returns(() =>
+                              {
+                                  if (keySequence.Count == 0) return new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false);
+                                  var key = keySequence.Dequeue();
+                                  return new ConsoleKeyInfo(' ', key, false, false, false);
+                              });
 
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream
-            .Setup(s => s.WriteAsync(buffer, 0, 10, token))
-            .ThrowsAsync(new InvalidOperationException());
+            var iqStartedCounter = 0;
+            _mockNetSdr.SetupGet(c => c.IQStarted)
+                       .Returns(() =>
+                       {
+                           iqStartedCounter++;
+                           return iqStartedCounter > 1;
+                       });
 
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
 
-        // Act + Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            wrapper.WriteAsync(buffer, 0, 10, token));
-    }
+            await _runner.RunAsync();
 
-    [Fact]
-    public void Dispose_ShouldCallDisposeOnStream()
-    {
-        // Arrange
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream.Setup(s => s.Dispose());
+            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Once());
+            _mockNetSdr.Verify(c => c.ChangeFrequencyAsync(20000000, 1), Times.Once());
 
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+            _mockNetSdr.VerifyGet(c => c.IQStarted, Times.Exactly(2));
 
-        // Act
-        wrapper.Dispose();
+            _mockNetSdr.Verify(c => c.StartIQAsync(), Times.Once());
+            _mockNetSdr.Verify(c => c.StopIQAsync(), Times.Once());
 
-        // Assert
-        mockStream.Verify(s => s.Dispose(), Times.Once);
-    }
+            _mockNetSdr.Verify(c => c.Disconect(), Times.Once());
 
-    [Fact]
-    public void Dispose_ShouldNotThrowIfCalledTwice()
-    {
-        // Arrange
-        var mockStream = new Mock<NetworkStream>(MockBehavior.Strict);
-        mockStream.Setup(s => s.Dispose());
+            _mockNetSdr.VerifyNoOtherCalls();
+        }
 
-        var wrapper = new NetworkStreamWrapper(mockStream.Object);
+        [Test]
+        public async Task RunAsync_QuitsImmediatelyOnQ()
+        {
+            _mockConsoleReader.Setup(r => r.ReadKey())
+                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
 
-        // Act
-        wrapper.Dispose();
-        wrapper.Dispose(); // second call must not throw
+            await _runner.RunAsync();
 
-        // Assert
-        mockStream.Verify(s => s.Dispose(), Times.Once);
+            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Never());
+            _mockNetSdr.Verify(c => c.Disconect(), Times.Never());
+        }
     }
 }
