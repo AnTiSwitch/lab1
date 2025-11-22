@@ -6,42 +6,51 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
-public interface INetworkStreamWrapper : IDisposable
+// Інтерфейси та клас NetworkStreamWrapper, які знаходяться в EchoServer.Abstractions
+namespace EchoServer.Abstractions
 {
-    Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token);
-    Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token);
+    // Оскільки цей файл знаходиться в тестовому проєкті, ми маємо переконатися,
+    // що інтерфейси, які ми імітуємо, мають правильну сигнатуру.
+    // Припускаємо, що реальний INetworkStreamWrapper визначений тут.
+    public interface INetworkStreamWrapper : IDisposable
+    {
+        Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token);
+        Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token);
+    }
+
+    public class NetworkStreamWrapper : INetworkStreamWrapper
+    {
+        private readonly NetworkStream _stream;
+
+        public NetworkStreamWrapper(NetworkStream stream)
+        {
+            _stream = stream;
+        }
+
+        public Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
+        {
+            int bytesRead = _stream.Read(buffer, offset, count);
+            return Task.FromResult(bytesRead);
+        }
+
+        public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token)
+        {
+            return _stream.WriteAsync(buffer, offset, count, token);
+        }
+
+        public void Dispose()
+        {
+            _stream?.Dispose();
+            GC.SuppressFinalize(this);
+        }
+    }
 }
 
-public class NetworkStreamWrapper : INetworkStreamWrapper
-{
-    private readonly NetworkStream _stream;
-
-    public NetworkStreamWrapper(NetworkStream stream)
-    {
-        _stream = stream;
-    }
-
-    public Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
-    {
-        int bytesRead = _stream.Read(buffer, offset, count);
-        return Task.FromResult(bytesRead);
-    }
-
-    public Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken token)
-    {
-        return _stream.WriteAsync(buffer, offset, count, token);
-    }
-
-    public void Dispose()
-    {
-        _stream?.Dispose();
-        GC.SuppressFinalize(this);
-    }
-}
-
-
+// Тести використовують об'єкти з EchoServer.Abstractions
 namespace EchoServerTests
 {
+    using EchoServer.Abstractions;
+
     [TestFixture]
     public class NetworkStreamWrapperTests
     {
@@ -53,6 +62,13 @@ namespace EchoServerTests
         {
             _mockStream = new Mock<NetworkStream>(MockBehavior.Loose);
             _wrapper = new NetworkStreamWrapper(_mockStream.Object);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            // ВИПРАВЛЕННЯ NUnit1032
+            _wrapper?.Dispose();
         }
 
         [Test]
