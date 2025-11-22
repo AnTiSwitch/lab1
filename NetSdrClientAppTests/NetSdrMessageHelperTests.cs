@@ -145,7 +145,11 @@ namespace NetSdrClientAppTests
             rawMsg[_msgHeaderLength] = invalidCodeBytes[0];
             rawMsg[_msgHeaderLength + 1] = invalidCodeBytes[1];
 
-            bool success = NetSdrMessageHelper.TranslateMessage(rawMsg, out var actualType, out var actualItemCode, out var sequenceNumber, out var actualBody);
+            bool success = NetSdrMessageHelper.TranslateMessage(rawMsg,
+                                                               out var actualType,
+                                                               out var actualItemCode,
+                                                               out var sequenceNumber,
+                                                               out var actualBody);
 
             Assert.IsFalse(success);
             Assert.That(actualType, Is.EqualTo(expectedType));
