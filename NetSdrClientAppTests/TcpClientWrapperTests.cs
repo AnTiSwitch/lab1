@@ -12,7 +12,7 @@ using NUnit.Framework;
 
 namespace NetSdrClientApp.Tests.Networking
 {
-    // Додаємо клас-нащадок для тестування приватного методу StartListeningAsync
+    // Додаємо клас-нащадок для тестування protected методу StartListeningAsync
     public class TestableTcpClientWrapper : TcpClientWrapper
     {
         public TestableTcpClientWrapper(string host, int port) : base(host, port) { }
@@ -394,7 +394,6 @@ namespace NetSdrClientApp.Tests.Networking
             Assert.That(wrapper.Connected, Is.False);
         }
 
-        // Виправлено попередження S2699
         [Test]
         public void CleanupResources_HandlesObjectDisposedException_ForCts()
         {
@@ -430,6 +429,7 @@ namespace NetSdrClientApp.Tests.Networking
 
             wrapper.Connect();
             await Task.Delay(100);
+            Assert.That(wrapper.Connected, Is.True); // Додано перевірку Connected
 
             var serverTask = Task.Run(async () =>
             {
@@ -438,10 +438,16 @@ namespace NetSdrClientApp.Tests.Networking
                 client.Close();
             });
 
-            await Task.WhenAny(serverTask, Task.Delay(1000));
+            // ВИПРАВЛЕННЯ: Додаємо опитування (polling), щоб дочекатися зміни стану Connected на False.
+            var timeoutTask = Task.Delay(2000);
+            while (wrapper.Connected && timeoutTask.IsCompleted == false)
+            {
+                await Task.Delay(50);
+            }
 
-            Assert.That(wrapper.Connected, Is.False);
             await serverTask;
+
+            Assert.That(wrapper.Connected, Is.False, "Wrapper should be disconnected after server closes connection (bytesRead == 0).");
         }
     }
 }
