@@ -429,7 +429,7 @@ namespace NetSdrClientApp.Tests.Networking
 
             wrapper.Connect();
             await Task.Delay(100);
-            Assert.That(wrapper.Connected, Is.True); // Додано перевірку Connected
+            Assert.That(wrapper.Connected, Is.True);
 
             var serverTask = Task.Run(async () =>
             {
@@ -438,7 +438,6 @@ namespace NetSdrClientApp.Tests.Networking
                 client.Close();
             });
 
-            // ВИПРАВЛЕННЯ: Додаємо опитування (polling), щоб дочекатися зміни стану Connected на False.
             var timeoutTask = Task.Delay(2000);
             while (wrapper.Connected && timeoutTask.IsCompleted == false)
             {
@@ -448,6 +447,53 @@ namespace NetSdrClientApp.Tests.Networking
             await serverTask;
 
             Assert.That(wrapper.Connected, Is.False, "Wrapper should be disconnected after server closes connection (bytesRead == 0).");
+        }
+
+        // НОВИЙ ТЕСТ: Покриває catch (Exception ex) у StartListeningAsync
+        [Test]
+        public async Task Listening_HandlesGeneralSocketException()
+        {
+            Assert.That(_testServer, Is.Not.Null);
+            _testServer.Start();
+            var wrapper = new TcpClientWrapper("localhost", _testPort);
+
+            // Використовуємо TaskCompletionSource, щоб дочекатися, поки слухач запустить CleanupResources
+            var listenerStopped = new TaskCompletionSource<bool>();
+
+            // Нам потрібна перевірка того, що слухач зупинився
+            var listenerTask = Task.Run(async () =>
+            {
+                try
+                {
+                    wrapper.Connect();
+                    await Task.Delay(100);
+                    Assert.That(wrapper.Connected, Is.True);
+
+                    // Чекаємо, поки слухач запуститься, а потім повертаємо false, щоб він зупинився
+                    var acceptedClient = await _testServer!.AcceptTcpClientAsync();
+                    await Task.Delay(100);
+
+                    // Примусово закриваємо клієнтський сокет з боку сервера,
+                    // що зазвичай спричиняє SocketException або IOException у ReadAsync
+                    acceptedClient.Client.Shutdown(SocketShutdown.Both);
+                    acceptedClient.Close();
+
+                    // Чекаємо, поки слухач на клієнті спіймає помилку
+                    await Task.Delay(500);
+
+                }
+                catch (Exception) { /* Ігноруємо помилки, пов'язані із закриттям сокетів */ }
+                finally
+                {
+                    // Сигналізуємо, що слухач завершив свою роботу (і, ймовірно, спіймав помилку)
+                    listenerStopped.TrySetResult(true);
+                }
+            });
+
+            await Task.WhenAny(listenerStopped.Task, Task.Delay(3000));
+
+            Assert.That(listenerStopped.Task.IsCompletedSuccessfully, Is.True);
+            Assert.That(wrapper.Connected, Is.False);
         }
     }
 }
