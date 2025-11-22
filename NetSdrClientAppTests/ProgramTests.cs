@@ -1,142 +1,149 @@
-using System;
-using System.Threading.Tasks;
 using Moq;
 using NUnit.Framework;
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
-public interface ILogger
+// Інтерфейси та клас-раннер для забезпечення тестування
+public interface INetSdrClient
 {
-    void Log(string message);
-}
-
-public interface IEchoServer
-{
-    Task StartAsync();
-    void Stop();
-}
-
-public interface ITimedSender : IDisposable
-{
-    void StartSending(int intervalMilliseconds);
-    void StopSending();
+    Task ConnectAsync();
+    void Disconect();
+    Task ChangeFrequencyAsync(long freq, int receiverId);
+    Task StartIQAsync();
+    Task StopIQAsync();
+    bool IQStarted { get; }
 }
 
 public interface IConsoleReader
 {
-    ConsoleKeyInfo ReadKey(bool intercept);
+    ConsoleKeyInfo ReadKey();
 }
 
-public class AppRunner
+public class ConsoleAppRunner
 {
-    private readonly IEchoServer _server;
-    private readonly ILogger _logger;
+    private readonly INetSdrClient _netSdr;
     private readonly IConsoleReader _consoleReader;
-    private readonly ITimedSender _sender;
 
-    public AppRunner(IEchoServer server, ILogger logger, IConsoleReader consoleReader, ITimedSender sender)
+    public ConsoleAppRunner(INetSdrClient netSdr, IConsoleReader consoleReader)
     {
-        _server = server;
-        _logger = logger;
+        _netSdr = netSdr;
         _consoleReader = consoleReader;
-        _sender = sender;
     }
 
-    public async Task RunAppLogicAsync()
+    public async Task RunAsync()
     {
-        _logger.Log("Press any key to stop sending...");
-        _sender.StartSending(5000);
-
-        _logger.Log("Press 'q' to quit...");
-        while (_consoleReader.ReadKey(intercept: true).Key != ConsoleKey.Q)
+        while (true)
         {
+            var key = _consoleReader.ReadKey().Key;
+
+            if (key == ConsoleKey.C)
+            {
+                await _netSdr.ConnectAsync();
+            }
+            else if (key == ConsoleKey.D)
+            {
+                _netSdr.Disconect();
+            }
+            else if (key == ConsoleKey.F)
+            {
+                await _netSdr.ChangeFrequencyAsync(20000000, 1);
+            }
+            else if (key == ConsoleKey.S)
+            {
+                if (_netSdr.IQStarted)
+                {
+                    await _netSdr.StopIQAsync();
+                }
+                else
+                {
+                    await _netSdr.StartIQAsync();
+                }
+            }
+            else if (key == ConsoleKey.Q)
+            {
+                break;
+            }
         }
-
-        _sender.StopSending();
-        _server.Stop();
-        _logger.Log("Sender stopped.");
-
-        await Task.CompletedTask;
     }
 }
 
 
-namespace EchoServerTests
+namespace NetSdrClientAppTests
 {
     [TestFixture]
-    public class ProgramTests
+    public class ConsoleAppRunnerTests
     {
-        private Mock<IEchoServer> _mockServer;
-        private Mock<ILogger> _mockLogger;
+        private Mock<INetSdrClient> _mockNetSdr;
         private Mock<IConsoleReader> _mockConsoleReader;
-        private Mock<ITimedSender> _mockSender;
-        private AppRunner _runner;
+        private ConsoleAppRunner _runner;
 
         [SetUp]
         public void Setup()
         {
-            _mockServer = new Mock<IEchoServer>();
-            _mockLogger = new Mock<ILogger>();
+            _mockNetSdr = new Mock<INetSdrClient>();
             _mockConsoleReader = new Mock<IConsoleReader>();
-            _mockSender = new Mock<ITimedSender>();
 
-            _mockConsoleReader.Setup(r => r.ReadKey(It.IsAny<bool>()))
-                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
+            _mockConsoleReader.Setup(r => r.ReadKey())
+                              .Returns(() => new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
 
-            _runner = new AppRunner(_mockServer.Object, _mockLogger.Object, _mockConsoleReader.Object, _mockSender.Object);
+            _runner = new ConsoleAppRunner(_mockNetSdr.Object, _mockConsoleReader.Object);
         }
 
         [Test]
-        public async Task RunAppLogicAsync_ShouldExecuteAllStepsAndQuit()
+        public async Task RunAsync_ExecutesAllCommandsCorrectly()
         {
             var keySequence = new Queue<ConsoleKey>(new[]
             {
-                ConsoleKey.A,
+                ConsoleKey.C,
+                ConsoleKey.F,
+                ConsoleKey.S,
+                ConsoleKey.S,
+                ConsoleKey.D,
+                ConsoleKey.X,
                 ConsoleKey.Q
             });
 
-            _mockConsoleReader.SetupSequence(r => r.ReadKey(It.IsAny<bool>()))
-                              .Returns(new ConsoleKeyInfo(' ', keySequence.Dequeue(), false, false, false))
-                              .Returns(new ConsoleKeyInfo(' ', keySequence.Dequeue(), false, false, false));
+            _mockConsoleReader.Setup(r => r.ReadKey())
+                              .Returns(() =>
+                              {
+                                  if (keySequence.Count == 0) return new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false);
+                                  var key = keySequence.Dequeue();
+                                  return new ConsoleKeyInfo(' ', key, false, false, false);
+                              });
+
+            var iqStartedCounter = 0;
+            _mockNetSdr.SetupGet(c => c.IQStarted)
+                       .Returns(() =>
+                       {
+                           iqStartedCounter++;
+                           return iqStartedCounter > 1;
+                       });
 
 
-            await _runner.RunAppLogicAsync();
+            await _runner.RunAsync();
 
-            _mockLogger.Verify(l => l.Log("Press any key to stop sending..."), Times.Once());
-            _mockLogger.Verify(l => l.Log("Press 'q' to quit..."), Times.Once());
-            _mockLogger.Verify(l => l.Log("Sender stopped."), Times.Once());
+            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Once());
+            _mockNetSdr.Verify(c => c.ChangeFrequencyAsync(20000000, 1), Times.Once());
 
-            _mockSender.Verify(s => s.StartSending(5000), Times.Once());
-            _mockSender.Verify(s => s.StopSending(), Times.Once());
+            _mockNetSdr.Verify(c => c.StartIQAsync(), Times.Once());
+            _mockNetSdr.Verify(c => c.StopIQAsync(), Times.Once());
 
-            _mockServer.Verify(s => s.Stop(), Times.Once());
+            _mockNetSdr.Verify(c => c.Disconect(), Times.Once());
+
+            _mockNetSdr.VerifyNoOtherCalls();
         }
 
         [Test]
-        public async Task RunAppLogicAsync_ShouldQuitImmediately()
+        public async Task RunAsync_QuitsImmediatelyOnQ()
         {
-            _mockConsoleReader.Setup(r => r.ReadKey(It.IsAny<bool>()))
+            _mockConsoleReader.Setup(r => r.ReadKey())
                               .Returns(new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
 
-            await _runner.RunAppLogicAsync();
+            await _runner.RunAsync();
 
-            _mockSender.Verify(s => s.StartSending(It.IsAny<int>()), Times.Once());
-            _mockSender.Verify(s => s.StopSending(), Times.Once());
-            _mockServer.Verify(s => s.Stop(), Times.Once());
-
-            _mockConsoleReader.Verify(r => r.ReadKey(It.IsAny<bool>()), Times.Once());
-        }
-
-        [Test]
-        public async Task RunAppLogicAsync_ShouldHandleMultipleKeysBeforeQuit()
-        {
-            _mockConsoleReader.SetupSequence(r => r.ReadKey(It.IsAny<bool>()))
-                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.D, false, false, false))
-                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.F, false, false, false))
-                              .Returns(new ConsoleKeyInfo(' ', ConsoleKey.Q, false, false, false));
-
-            await _runner.RunAppLogicAsync();
-
-            _mockConsoleReader.Verify(r => r.ReadKey(It.IsAny<bool>()), Times.Exactly(3));
+            _mockNetSdr.Verify(c => c.ConnectAsync(), Times.Never());
+            _mockNetSdr.Verify(c => c.Disconect(), Times.Never());
         }
     }
 }
