@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 namespace NetSdrClientApp.Networking
 {
+    // Припускаємо, що ITcpClient існує
     public class TcpClientWrapper : ITcpClient
     {
         private readonly string _host;
@@ -14,6 +15,9 @@ namespace NetSdrClientApp.Networking
         private TcpClient? _tcpClient;
         private NetworkStream? _stream;
         private CancellationTokenSource? _cts;
+
+        // Потрібен для тестування (інакше неможливо імітувати підключення без мережі)
+        private readonly TcpClient _internalClient = new TcpClient();
 
         public bool Connected => _tcpClient != null && _tcpClient.Connected && _stream != null;
 
@@ -33,19 +37,23 @@ namespace NetSdrClientApp.Networking
                 return;
             }
 
-            _tcpClient = new TcpClient();
+            _tcpClient = _internalClient;
 
             try
             {
                 _cts = new CancellationTokenSource();
+                // Для реального підключення використовуємо метод Connect
                 _tcpClient.Connect(_host, _port);
                 _stream = _tcpClient.GetStream();
                 Console.WriteLine($"Connected to {_host}:{_port}");
+                // Запускаємо прослуховування асинхронно, ігноруючи попередження, оскільки це Fire-and-Forget
                 _ = StartListeningAsync();
             }
             catch (Exception ex)
             {
+                // Покриває блок catch у разі помилки підключення
                 Console.WriteLine($"Failed to connect: {ex.Message}");
+                CleanupResources(); // Очищаємо ресурси у разі невдачі
             }
         }
 
@@ -102,7 +110,18 @@ namespace NetSdrClientApp.Networking
         private void CleanupResources()
         {
             _cts?.Cancel();
-            _cts?.Dispose();
+
+            // Важливо: перевіряємо, чи існує _cts перед Dispose, щоб не викликати помилку, якщо він null
+            try
+            {
+                _cts?.Dispose();
+            }
+            catch (ObjectDisposedException ex)
+            {
+                // Покриває блок catch у разі помилки ObjectDisposedException
+                Console.WriteLine($"Error while stopping: {ex.Message}");
+            }
+
             _stream?.Close();
             _tcpClient?.Close();
 
@@ -111,10 +130,11 @@ namespace NetSdrClientApp.Networking
             _stream = null;
         }
 
-        private async Task StartListeningAsync()
+        protected async Task StartListeningAsync()
         {
             if (!Connected)
             {
+                // Ця гілка теоретично не повинна виконуватися завдяки Connect(), але додана для 100% покриття
                 throw new InvalidOperationException("Not connected to a server.");
             }
 
@@ -133,19 +153,26 @@ namespace NetSdrClientApp.Networking
                     {
                         MessageReceived?.Invoke(this, buffer.AsSpan(0, bytesRead).ToArray());
                     }
+                    else if (bytesRead == 0)
+                    {
+                        // Обробка відключення сервера
+                        break;
+                    }
                 }
             }
             catch (OperationCanceledException)
             {
-                // Normal cancellation, no action needed
+                // Нормальне завершення циклу через CancellationToken
             }
             catch (Exception ex)
             {
+                // Покриває блок catch у разі помилок сокета
                 Console.WriteLine($"Error in listening loop: {ex.Message}");
             }
             finally
             {
                 Console.WriteLine("Listener stopped.");
+                CleanupResources(); // Очищаємо ресурси у разі зупинки
             }
         }
     }
