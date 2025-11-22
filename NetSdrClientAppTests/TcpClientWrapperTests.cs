@@ -449,7 +449,7 @@ namespace NetSdrClientApp.Tests.Networking
             Assert.That(wrapper.Connected, Is.False, "Wrapper should be disconnected after server closes connection (bytesRead == 0).");
         }
 
-        // НОВИЙ ТЕСТ: Покриває catch (Exception ex) у StartListeningAsync
+        // Покриває catch (Exception ex) у StartListeningAsync
         [Test]
         public async Task Listening_HandlesGeneralSocketException()
         {
@@ -457,10 +457,8 @@ namespace NetSdrClientApp.Tests.Networking
             _testServer.Start();
             var wrapper = new TcpClientWrapper("localhost", _testPort);
 
-            // Використовуємо TaskCompletionSource, щоб дочекатися, поки слухач запустить CleanupResources
             var listenerStopped = new TaskCompletionSource<bool>();
 
-            // Нам потрібна перевірка того, що слухач зупинився
             var listenerTask = Task.Run(async () =>
             {
                 try
@@ -469,31 +467,32 @@ namespace NetSdrClientApp.Tests.Networking
                     await Task.Delay(100);
                     Assert.That(wrapper.Connected, Is.True);
 
-                    // Чекаємо, поки слухач запуститься, а потім повертаємо false, щоб він зупинився
                     var acceptedClient = await _testServer!.AcceptTcpClientAsync();
                     await Task.Delay(100);
 
-                    // Примусово закриваємо клієнтський сокет з боку сервера,
-                    // що зазвичай спричиняє SocketException або IOException у ReadAsync
+                    // Примусово закриваємо клієнтський сокет з боку сервера
                     acceptedClient.Client.Shutdown(SocketShutdown.Both);
                     acceptedClient.Close();
 
-                    // Чекаємо, поки слухач на клієнті спіймає помилку
-                    await Task.Delay(500);
-
+                    // Чекаємо, поки слухач на клієнті спіймає помилку і запустить CleanupResources
+                    // Використовуємо опитування, щоб дочекатися, коли wrapper.Connected стане False
+                    var timeoutTask = Task.Delay(3000);
+                    while (wrapper.Connected && timeoutTask.IsCompleted == false)
+                    {
+                        await Task.Delay(50);
+                    }
                 }
-                catch (Exception) { /* Ігноруємо помилки, пов'язані із закриттям сокетів */ }
+                catch (Exception) { }
                 finally
                 {
-                    // Сигналізуємо, що слухач завершив свою роботу (і, ймовірно, спіймав помилку)
                     listenerStopped.TrySetResult(true);
                 }
             });
 
-            await Task.WhenAny(listenerStopped.Task, Task.Delay(3000));
+            await Task.WhenAny(listenerStopped.Task, Task.Delay(3500)); // Збільшено таймаут
 
-            Assert.That(listenerStopped.Task.IsCompletedSuccessfully, Is.True);
-            Assert.That(wrapper.Connected, Is.False);
+            Assert.That(listenerStopped.Task.IsCompletedSuccessfully, Is.True, "Listener task should complete successfully after handling exception.");
+            Assert.That(wrapper.Connected, Is.False, "Wrapper should be disconnected after socket error.");
         }
     }
 }
