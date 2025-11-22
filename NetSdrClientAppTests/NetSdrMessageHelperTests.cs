@@ -160,21 +160,31 @@ namespace NetSdrClientAppTests
             ushort expectedSequenceNumber = 12345;
             byte[] expectedBody = { 0xAA, 0xBB, 0xCC };
 
-            byte[] msgWithoutSeq = NetSdrMessageHelper.GetDataItemMessage(expectedType, expectedBody);
+            int totalPayloadLength = 5;
+
+            ushort headerValue = (ushort)(totalPayloadLength + ((int)expectedType << 13));
+            byte[] headerBytes = BitConverter.GetBytes(headerValue);
 
             byte[] seqBytes = BitConverter.GetBytes(expectedSequenceNumber);
-            byte[] rawMsg = msgWithoutSeq.Take(_msgHeaderLength)
-                                         .Concat(seqBytes)
-                                         .Concat(expectedBody)
-                                         .ToArray();
 
-            bool success = NetSdrMessageHelper.TranslateMessage(rawMsg, out var actualType, out var itemCode, out var actualSequenceNumber, out var actualBody);
+            byte[] rawMsg = headerBytes
+                                 .Concat(seqBytes)
+                                 .Concat(expectedBody)
+                                 .ToArray();
+
+            bool success = NetSdrMessageHelper.TranslateMessage(rawMsg,
+                                                               out var actualType,
+                                                               out var itemCode,
+                                                               out var actualSequenceNumber,
+                                                               out var actualBody);
 
             Assert.IsTrue(success);
+
             Assert.That(actualType, Is.EqualTo(expectedType));
+            Assert.That(actualBody, Is.EqualTo(expectedBody));
+
             Assert.That(itemCode, Is.EqualTo(NetSdrMessageHelper.ControlItemCodes.None));
             Assert.That(actualSequenceNumber, Is.EqualTo(expectedSequenceNumber));
-            Assert.That(actualBody, Is.EqualTo(expectedBody));
         }
 
         [Test]
@@ -214,7 +224,9 @@ namespace NetSdrClientAppTests
 
             var samples = NetSdrMessageHelper.GetSamples(sampleSizeBits, body).ToList();
 
-            Assert.That(samples.Count, Is.EqualTo(1));
+            int expectedSampleCount = body.Length / sampleSizeBytes;
+
+            Assert.That(samples.Count, Is.EqualTo(expectedSampleCount));
 
             byte[] actualBytes = BitConverter.GetBytes(samples.First());
 
