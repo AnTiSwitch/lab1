@@ -1,5 +1,5 @@
 using System;
-using System.Net.Sockets;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,11 +7,11 @@ namespace EchoServer.Abstractions
 {
     public class NetworkStreamWrapper : INetworkStreamWrapper
     {
-        private readonly NetworkStream _stream;
+        private readonly Stream _stream;
 
-        public NetworkStreamWrapper(NetworkStream stream)
+        public NetworkStreamWrapper(Stream stream)
         {
-            _stream = stream;
+            _stream = stream ?? throw new ArgumentNullException(nameof(stream));
         }
 
         public Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken token)
