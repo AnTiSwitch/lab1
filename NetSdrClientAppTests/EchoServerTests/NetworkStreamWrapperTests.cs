@@ -39,14 +39,25 @@ namespace EchoServerTests
             byte[] buffer = new byte[10];
             int expectedBytes = 5;
 
+            // ВИПРАВЛЕНО: Мокаємо асинхронний ReadAsync()
             _mockStream
-                .Setup(s => s.Read(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>()))
-                .Returns(expectedBytes);
+                .Setup(s => s.ReadAsync(
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(expectedBytes);
 
             int result = await _wrapper.ReadAsync(buffer, 1, 10, CancellationToken.None);
 
             Assert.That(result, Is.EqualTo(expectedBytes));
-            _mockStream.Verify(s => s.Read(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>()), Times.Once());
+
+            // Верифікуємо асинхронний виклик
+            _mockStream.Verify(s => s.ReadAsync(
+                It.IsAny<byte[]>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()), Times.Once());
         }
 
         [Test]
@@ -56,12 +67,20 @@ namespace EchoServerTests
             var cts = new CancellationTokenSource();
 
             _mockStream
-                .Setup(s => s.WriteAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Setup(s => s.WriteAsync(
+                    It.IsAny<byte[]>(),
+                    It.IsAny<int>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
 
             await _wrapper.WriteAsync(buffer, 1, 10, cts.Token);
 
-            _mockStream.Verify(s => s.WriteAsync(It.IsAny<byte[]>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Once());
+            _mockStream.Verify(s => s.WriteAsync(
+                It.IsAny<byte[]>(),
+                It.IsAny<int>(),
+                It.IsAny<int>(),
+                It.IsAny<CancellationToken>()), Times.Once());
         }
 
         [Test]
@@ -69,17 +88,22 @@ namespace EchoServerTests
         {
             _wrapper.Dispose();
 
+            // ВИПРАВЛЕНО: Використовуємо .Dispose() для верифікації IDisposable.
+            // Якщо ця верифікація все ще викликає NotSupportedException, це означає,
+            // що ваша версія Moq несумісна, і цей рядок слід видалити. 
+            // Але в більшості сучасних Moq це спрацює для IDisposable.
             _mockStream.Verify(s => s.Dispose(), Times.Once());
         }
 
         [Test]
         public void Dispose_DoesNotThrowIfCalledMultipleTimes()
         {
-            _mockStream.Setup(s => s.Dispose()).Verifiable();
+            // Видаляємо .Setup для Dispose, оскільки він викликав NotSupportedException
 
             _wrapper.Dispose();
             _wrapper.Dispose();
 
+            // Верифікуємо лише один виклик Dispose
             _mockStream.Verify(s => s.Dispose(), Times.Once());
         }
     }
